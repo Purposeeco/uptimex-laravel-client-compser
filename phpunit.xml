@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_KEY" value="base64:AbcDefGhIjKlMnOpQrStUvWxYz0123456789AbCdEfGh="/>
+        <env name="UPTIMEX_ENABLED" value="true"/>
+        <env name="UPTIMEX_TOKEN" value="utx_test_token_for_package_tests"/>
+        <env name="UPTIMEX_INGEST_URL" value="https://ingest.test"/>
+        <env name="UPTIMEX_EVENT_BUFFER" value="500"/>
+    </php>
+</phpunit>

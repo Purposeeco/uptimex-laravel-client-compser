@@ -1,0 +1,50 @@
+{
+    "name": "uptimex/laravel-client",
+    "description": "Laravel SDK that sends application telemetry (requests, queries, exceptions, jobs, logs, …) to UptimeX.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["laravel", "uptimex", "apm", "monitoring", "telemetry"],
+    "require": {
+        "php": "^8.2",
+        "ext-json": "*",
+        "ext-zlib": "*",
+        "guzzlehttp/guzzle": "^7.5",
+        "illuminate/console": "^10.0|^11.0|^12.0|^13.0",
+        "illuminate/contracts": "^10.0|^11.0|^12.0|^13.0",
+        "illuminate/http": "^10.0|^11.0|^12.0|^13.0",
+        "illuminate/support": "^10.0|^11.0|^12.0|^13.0"
+    },
+    "require-dev": {
+        "mockery/mockery": "^1.6",
+        "orchestra/testbench": "^8.0|^9.0|^10.0",
+        "pestphp/pest": "^2.0|^3.0|^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Uptimex\\Client\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Uptimex\\Client\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Uptimex\\Client\\UptimexServiceProvider"
+            ],
+            "aliases": {
+                "Uptimex": "Uptimex\\Client\\Facades\\Uptimex"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    }
+}
