@@ -46,5 +46,10 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true
         }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest --testsuite=Unit,Feature",
+        "test:integration": "vendor/bin/pest --testsuite=Integration",
+        "test:all": "vendor/bin/pest"
     }
 }

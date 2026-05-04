@@ -47,6 +47,41 @@ php artisan vendor:publish --tag=uptimex-config
 | `UPTIMEX_EVENT_BUFFER` | `500` | Max events buffered per execution context |
 | `UPTIMEX_FLUSH_TIMEOUT` | `0.5` | Seconds; HTTP timeout on flush |
 
+## Running the test suite
+
+The package ships three test suites:
+
+| Suite | What it covers | Speed | External deps |
+|---|---|---|---|
+| `Unit` + `Feature` | SDK internals against a Testbench-faked Laravel; uses `NullTransport` (no socket) | ~1s | None |
+| `Integration` | Real HTTP calls to a live UptimeX ingest endpoint | ~1.5s | A reachable UptimeX server + a valid ingest token |
+
+```bash
+composer test                # default — Unit + Feature only, hermetic
+composer test:integration    # only the real-wire suite
+composer test:all            # everything
+```
+
+`Integration` tests are skipped automatically unless both env vars are set:
+
+```bash
+UPTIMEX_INTEGRATION_INGEST_URL=https://ingest.uptimex.test \
+UPTIMEX_INTEGRATION_TOKEN=utx_your_real_token \
+composer test:integration
+```
+
+To mint a token against a local backend:
+
+```bash
+php artisan tinker --execute="
+  \$t = App\Models\Tenant::first();
+  tenancy()->initialize(\$t);
+  \$e = App\Models\Environment::first();
+  [\$plain] = App\Models\IngestToken::generate(\$t->id, \$e->id, 'sdk-integration');
+  echo \$plain;
+"
+```
+
 ## License
 
 MIT.

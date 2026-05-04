@@ -56,6 +56,35 @@ it('does not throw on network failure', function () {
     expect($transport->send(['events' => []]))->toBeFalse();
 });
 
+it('returns false on 402 (quota-exceeded) without retrying', function () {
+    $container = [];
+    $transport = buildTransport(
+        new MockHandler([new Response(402, [], '{"error":"quota_exceeded"}')]),
+        $container,
+    );
+
+    $result = $transport->send([
+        'events' => [['type' => 'request', 'trace_id' => 'a1b2c3', 'occurred_at' => '2026-05-04T00:00:00Z']],
+    ]);
+
+    expect($result)->toBeFalse()
+        ->and($container)->toHaveCount(1, 'SDK must not retry on 402 — that would self-DDoS a quota-exceeded tenant');
+});
+
+it('fires exactly one HTTP request on any 4xx response (no retry storm)', function () {
+    $container = [];
+    // If the SDK ever started retrying, MockHandler would run out after the
+    // first response and Guzzle would throw — making this assertion fail
+    // for the right reason.
+    $transport = buildTransport(
+        new MockHandler([new Response(429, [], '{"error":"rate_limited"}')]),
+        $container,
+    );
+
+    expect($transport->send(['events' => [['type' => 'request', 'trace_id' => 'a1b2c3', 'occurred_at' => '2026-05-04T00:00:00Z']]]))->toBeFalse()
+        ->and($container)->toHaveCount(1);
+});
+
 it('sends a gzip-encoded JSON body with bearer auth', function () {
     $container = [];
     $transport = buildTransport(new MockHandler([new Response(202, [], '{}')]), $container);
