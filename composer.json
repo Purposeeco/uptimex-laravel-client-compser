@@ -3,7 +3,18 @@
     "description": "Laravel SDK that sends application telemetry (requests, queries, exceptions, jobs, logs, …) to UptimeX.",
     "type": "library",
     "license": "MIT",
-    "keywords": ["laravel", "uptimex", "apm", "monitoring", "telemetry"],
+    "keywords": ["laravel", "uptimex", "apm", "monitoring", "telemetry", "observability"],
+    "homepage": "https://github.com/Purposeeco/uptimex-laravel-client-compser",
+    "support": {
+        "issues": "https://github.com/Purposeeco/uptimex-laravel-client-compser/issues",
+        "source": "https://github.com/Purposeeco/uptimex-laravel-client-compser"
+    },
+    "authors": [
+        {
+            "name": "Purposeeco",
+            "homepage": "https://github.com/Purposeeco"
+        }
+    ],
     "require": {
         "php": "^8.2",
         "ext-json": "*",

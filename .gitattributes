@@ -1,0 +1,9 @@
+# Files excluded from the dist tarball (`composer require uptimex/laravel-client`
+# downloads only the runtime code; tests + CI metadata never land in the
+# consuming app's vendor/).
+/.github           export-ignore
+/.gitattributes    export-ignore
+/.gitignore        export-ignore
+/phpunit.xml       export-ignore
+/tests             export-ignore
+/composer.lock     export-ignore
