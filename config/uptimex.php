@@ -28,7 +28,7 @@ return [
     | Ingest endpoint
     |--------------------------------------------------------------------------
     */
-    'ingest_url' => env('UPTIMEX_INGEST_URL', 'https://ingest.uptimex.io'),
+    'ingest_url' => env('UPTIMEX_INGEST_URL', 'https://ingest.uptimex.tech'),
 
     /*
     |--------------------------------------------------------------------------
@@ -70,7 +70,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Prevents the recursive feedback loop when an UptimeX server dogfoods
-    | itself: the SDK posts to `ingest.uptimex.io`, the server receives it,
+    | itself: the SDK posts to `ingest.uptimex.tech`, the server receives it,
     | the server's own SDK would otherwise capture that ingest request,
     | flush it back to ingest, ad infinitum.
     |

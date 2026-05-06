@@ -2,7 +2,7 @@
 
 # UptimeX Laravel Client
 
-**The official Laravel SDK for [UptimeX](https://uptimex.io) — full-stack APM
+**The official Laravel SDK for [UptimeX](https://uptimex.tech) — full-stack APM
 and uptime monitoring, self-hosted or cloud.**
 
 [![Tests](https://img.shields.io/github/actions/workflow/status/Purposeeco/uptimex-laravel-client-compser/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/Purposeeco/uptimex-laravel-client-compser/actions/workflows/tests.yml)
@@ -108,7 +108,7 @@ php artisan vendor:publish --tag=uptimex-config
 |---|---|---|
 | `UPTIMEX_ENABLED` | `true` | Master switch — set `false` to disable in non-prod |
 | `UPTIMEX_TOKEN` | — | Environment-scoped ingest token from the UptimeX dashboard |
-| `UPTIMEX_INGEST_URL` | `https://ingest.uptimex.io` | UptimeX server base URL |
+| `UPTIMEX_INGEST_URL` | `https://ingest.uptimex.tech` | UptimeX server base URL |
 | `UPTIMEX_DEPLOY` | — | Release identifier (set by `uptimex:deploy`) |
 | `UPTIMEX_SERVER` | hostname | Optional server label shown in the dashboard |
 | `UPTIMEX_EVENT_BUFFER` | `500` | Max events buffered per execution context |
@@ -246,6 +246,6 @@ events.
 A Palestinian software development company based in the West Bank.<br>
 We build observability and developer tools used by teams across the region and beyond.
 
-[**Website**](https://github.com/Purposeeco) · [**Issues**](https://github.com/Purposeeco/uptimex-laravel-client-compser/issues) · [**UptimeX**](https://uptimex.io)
+[**UptimeX**](https://uptimex.tech) · [**GitHub Org**](https://github.com/Purposeeco) · [**Issues**](https://github.com/Purposeeco/uptimex-laravel-client-compser/issues)
 
 </div>
