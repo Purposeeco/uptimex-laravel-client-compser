@@ -5,6 +5,7 @@
 **The official Laravel SDK for [UptimeX](https://uptimex.io) — full-stack APM
 and uptime monitoring, self-hosted or cloud.**
 
+[![Tests](https://img.shields.io/github/actions/workflow/status/Purposeeco/uptimex-laravel-client-compser/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/Purposeeco/uptimex-laravel-client-compser/actions/workflows/tests.yml)
 [![Latest Version](https://img.shields.io/packagist/v/uptimex/laravel-client.svg?style=flat-square)](https://packagist.org/packages/uptimex/laravel-client)
 [![PHP Version](https://img.shields.io/packagist/php-v/uptimex/laravel-client.svg?style=flat-square)](https://packagist.org/packages/uptimex/laravel-client)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
