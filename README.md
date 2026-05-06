@@ -232,11 +232,6 @@ events.
 - Laravel **10 / 11 / 12 / 13**
 - A reachable UptimeX server (self-hosted or cloud)
 
-## Maintainer notes
-
-Publishing the SDK from the monorepo to this public repo is documented
-in [PUBLISHING.md](PUBLISHING.md).
-
 ## License
 
 [MIT](LICENSE) © Purpose Company
