@@ -5,6 +5,7 @@ namespace Uptimex\Client\Transport;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
+use Psr\Http\Message\ResponseInterface;
 use Throwable;
 
 /**
@@ -15,6 +16,13 @@ use Throwable;
  * Failures are swallowed and logged at warning level — the SDK is observability
  * infrastructure, not bookkeeping. A dropped batch is acceptable; a thrown
  * exception bubbling into the host's request handler is not.
+ *
+ * Redirects are deliberately NOT followed. UptimeX servers force HTTPS, so a
+ * misconfigured `http://` UPTIMEX_INGEST_URL would otherwise hit a 301 →
+ * Guzzle silently downgrades the POST to a GET while following it → the
+ * server answers 405 "GET not supported". That symptom is three hops removed
+ * from the cause. With redirects off, the SDK sees the raw 3xx and logs an
+ * actionable hint instead.
  */
 final class HttpTransport implements Transport
 {
@@ -38,7 +46,7 @@ final class HttpTransport implements Transport
         }
 
         try {
-            $response = $this->http->post(rtrim($this->ingestUrl, '/').'/api/ingest/events', [
+            $response = $this->http->post($this->endpoint('events'), [
                 'headers' => [
                     'Authorization' => 'Bearer '.$this->token,
                     'Content-Type' => 'application/json',
@@ -49,6 +57,7 @@ final class HttpTransport implements Transport
                 'timeout' => $this->timeout,
                 'connect_timeout' => $this->connectTimeout,
                 'http_errors' => false,
+                'allow_redirects' => false,
             ]);
 
             $status = $response->getStatusCode();
@@ -56,10 +65,7 @@ final class HttpTransport implements Transport
                 return true;
             }
 
-            Log::warning('uptimex.transport.non_2xx', [
-                'status' => $status,
-                'body_preview' => substr((string) $response->getBody(), 0, 500),
-            ]);
+            $this->logBadStatus('uptimex.transport', $status, $response);
 
             return false;
         } catch (GuzzleException|Throwable $e) {
@@ -72,7 +78,7 @@ final class HttpTransport implements Transport
     public function sendDeploy(array $payload): ?array
     {
         try {
-            $response = $this->http->post(rtrim($this->ingestUrl, '/').'/api/ingest/deploy', [
+            $response = $this->http->post($this->endpoint('deploy'), [
                 'headers' => [
                     'Authorization' => 'Bearer '.$this->token,
                     'Content-Type' => 'application/json',
@@ -84,6 +90,7 @@ final class HttpTransport implements Transport
                 'timeout' => 5.0,
                 'connect_timeout' => 2.0,
                 'http_errors' => false,
+                'allow_redirects' => false,
             ]);
 
             $status = $response->getStatusCode();
@@ -93,10 +100,7 @@ final class HttpTransport implements Transport
                 return is_array($decoded) ? $decoded : ['ok' => true];
             }
 
-            Log::warning('uptimex.deploy.non_2xx', [
-                'status' => $status,
-                'body_preview' => substr((string) $response->getBody(), 0, 500),
-            ]);
+            $this->logBadStatus('uptimex.deploy', $status, $response);
 
             return null;
         } catch (GuzzleException|Throwable $e) {
@@ -104,5 +108,44 @@ final class HttpTransport implements Transport
 
             return null;
         }
+    }
+
+    /**
+     * Build the absolute ingest endpoint URL for a given path segment.
+     */
+    private function endpoint(string $path): string
+    {
+        return rtrim($this->ingestUrl, '/').'/api/ingest/'.$path;
+    }
+
+    /**
+     * Log a non-2xx response. A 3xx gets a dedicated `*.redirect` channel
+     * with a concrete hint, because the most common cause — an `http://`
+     * ingest URL against an HTTPS-only server — produces a baffling 405
+     * downstream if the redirect is followed.
+     */
+    private function logBadStatus(string $prefix, int $status, ResponseInterface $response): void
+    {
+        if ($status >= 300 && $status < 400) {
+            $usesHttp = str_starts_with(strtolower($this->ingestUrl), 'http://');
+
+            Log::warning($prefix.'.redirect', [
+                'status' => $status,
+                'location' => $response->getHeaderLine('Location'),
+                'hint' => $usesHttp
+                    ? "UPTIMEX_INGEST_URL uses 'http://' — change it to 'https://'. "
+                        .'The server redirected the request to HTTPS; the SDK does not '
+                        .'follow redirects because doing so silently turns the POST into a GET.'
+                    : 'The ingest endpoint returned a redirect. UPTIMEX_INGEST_URL should be '
+                        .'the bare server origin (e.g. https://ingest.uptimex.tech) with no trailing path.',
+            ]);
+
+            return;
+        }
+
+        Log::warning($prefix.'.non_2xx', [
+            'status' => $status,
+            'body_preview' => substr((string) $response->getBody(), 0, 500),
+        ]);
     }
 }

@@ -45,6 +45,24 @@ it('returns false on 5xx', function () {
     expect($transport->send(['events' => []]))->toBeFalse();
 });
 
+it('returns false on a 301 redirect without following it', function () {
+    $container = [];
+    // An http:// ingest URL against an HTTPS-only server answers 301.
+    // The SDK must NOT follow it — following downgrades POST→GET and the
+    // server then answers a baffling 405. One request, redirect not chased.
+    $transport = buildTransport(
+        new MockHandler([
+            new Response(301, ['Location' => 'https://ingest.test/api/ingest/events']),
+        ]),
+        $container,
+    );
+
+    expect($transport->send([
+        'events' => [['type' => 'request', 'trace_id' => 'abc', 'occurred_at' => '2026-05-16T00:00:00Z']],
+    ]))->toBeFalse()
+        ->and($container)->toHaveCount(1, 'the redirect must not be followed — exactly one request');
+});
+
 it('does not throw on network failure', function () {
     $transport = buildTransport(new MockHandler([
         new ConnectException(
