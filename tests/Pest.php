@@ -1,6 +1,8 @@
 <?php
 
 use GuzzleHttp\Client;
+use Uptimex\Client\Delivery\BatchDispatcher;
+use Uptimex\Client\Delivery\DirectDispatcher;
 use Uptimex\Client\Tests\TestCase;
 use Uptimex\Client\Transport\HttpTransport;
 use Uptimex\Client\Transport\Transport;
@@ -42,6 +44,53 @@ function uptimexIntegrationBoot(): array
     );
 
     app()->instance(Transport::class, $transport);
+    app()->instance(BatchDispatcher::class, new DirectDispatcher($transport));
 
     return [$url, $token, $transport];
+}
+
+/**
+ * Build a SpooledBatch for spool / drain / dispatcher tests.
+ *
+ * @param  list<array<string, mixed>>  $events
+ */
+function spooledBatch(?string $uuid = null, array $events = [['type' => 'request']]): \Uptimex\Client\Spool\SpooledBatch
+{
+    return new \Uptimex\Client\Spool\SpooledBatch(
+        batchUuid: $uuid ?? bin2hex(random_bytes(16)),
+        sdkVersion: '0.1.0',
+        host: 'test-host',
+        sampleRate: null,
+        context: null,
+        events: $events,
+    );
+}
+
+/**
+ * A unique, not-yet-created temp directory path for a filesystem test.
+ */
+function freshSpoolDir(): string
+{
+    return sys_get_temp_dir().DIRECTORY_SEPARATOR.'uptimex-spool-'.uniqid('', true);
+}
+
+/**
+ * Recursively delete a directory created by a filesystem test.
+ */
+function deleteDir(string $dir): void
+{
+    if (! is_dir($dir)) {
+        return;
+    }
+
+    $items = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST,
+    );
+
+    foreach ($items as $item) {
+        $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+    }
+
+    @rmdir($dir);
 }

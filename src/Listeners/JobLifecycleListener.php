@@ -32,7 +32,7 @@ final class JobLifecycleListener
 
     public function onQueued(JobQueued $event): void
     {
-        if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+        if (! $this->uptimex->isRecording()) {
             return;
         }
 
@@ -64,7 +64,7 @@ final class JobLifecycleListener
 
     public function onProcessed(JobProcessed $event): void
     {
-        if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+        if (! $this->uptimex->isRecording()) {
             return;
         }
 
@@ -80,7 +80,7 @@ final class JobLifecycleListener
 
     public function onReleased(JobReleasedAfterException $event): void
     {
-        if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+        if (! $this->uptimex->isRecording()) {
             return;
         }
 
@@ -96,7 +96,7 @@ final class JobLifecycleListener
 
     public function onFailed(JobFailed $event): void
     {
-        if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+        if (! $this->uptimex->isRecording()) {
             return;
         }
 

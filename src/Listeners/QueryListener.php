@@ -18,7 +18,7 @@ final class QueryListener
 
     public function handle(QueryExecuted $event): void
     {
-        if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+        if (! $this->uptimex->isRecording()) {
             return;
         }
 

@@ -27,5 +27,6 @@
         <env name="UPTIMEX_TOKEN" value="utx_test_token_for_package_tests"/>
         <env name="UPTIMEX_INGEST_URL" value="https://ingest.test"/>
         <env name="UPTIMEX_EVENT_BUFFER" value="500"/>
+        <env name="UPTIMEX_DELIVERY" value="direct"/>
     </php>
 </phpunit>

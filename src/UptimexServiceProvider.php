@@ -34,9 +34,17 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Throwable;
 use Uptimex\Client\Console\DeployCommand;
+use Uptimex\Client\Console\SpoolDrainCommand;
 use Uptimex\Client\Console\StatusCommand;
 use Uptimex\Client\Console\TestCommand;
 use Uptimex\Client\Context\ExecutionContext;
+use Uptimex\Client\Delivery\BatchDispatcher;
+use Uptimex\Client\Delivery\DirectDispatcher;
+use Uptimex\Client\Delivery\NullDispatcher;
+use Uptimex\Client\Delivery\SpoolingDispatcher;
+use Uptimex\Client\Drain\Drainer;
+use Uptimex\Client\Drain\DrainTrigger;
+use Uptimex\Client\Drain\SpoolDrainer;
 use Uptimex\Client\Exceptions\ExceptionCapture;
 use Uptimex\Client\Http\CaptureRequestMiddleware;
 use Uptimex\Client\Http\OutgoingRequestMiddleware;
@@ -47,6 +55,13 @@ use Uptimex\Client\Listeners\MailListener;
 use Uptimex\Client\Listeners\NotificationListener;
 use Uptimex\Client\Listeners\QueryListener;
 use Uptimex\Client\Listeners\ScheduledTaskLifecycleListener;
+use Uptimex\Client\Spool\FilesystemSpool;
+use Uptimex\Client\Spool\Spool;
+use Uptimex\Client\Spool\SpoolPathResolver;
+use Uptimex\Client\Support\Clock;
+use Uptimex\Client\Support\FilesystemLock;
+use Uptimex\Client\Support\Lock;
+use Uptimex\Client\Support\SystemClock;
 use Uptimex\Client\Transport\HttpTransport;
 use Uptimex\Client\Transport\NullTransport;
 use Uptimex\Client\Transport\Transport;
@@ -57,6 +72,8 @@ class UptimexServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/uptimex.php', 'uptimex');
 
+        // The low-level HTTP wire. It is no longer called from the request
+        // path — only the drainer uses it to ship spooled batches.
         $this->app->singleton(Transport::class, function (Application $app): Transport {
             $config = $app['config'];
 
@@ -74,12 +91,113 @@ class UptimexServiceProvider extends ServiceProvider
             );
         });
 
+        $this->registerSpoolServices();
+
+        // DirectDispatcher is also bound concretely so `uptimex:test` can
+        // demand a real synchronous round-trip regardless of `delivery`.
+        $this->app->bind(DirectDispatcher::class, function (Application $app): DirectDispatcher {
+            return new DirectDispatcher($app->make(Transport::class));
+        });
+
+        // The delivery strategy endTrace() hands finished batches to.
+        $this->app->singleton(BatchDispatcher::class, function (Application $app): BatchDispatcher {
+            $config = $app['config'];
+
+            if (! $config->get('uptimex.enabled', true) || ! $config->get('uptimex.token')) {
+                return new NullDispatcher;
+            }
+
+            $delivery = (string) $config->get('uptimex.delivery', 'spool');
+
+            // Serverless runtimes (Vapor / Lambda) have ephemeral disk and
+            // freeze after the response, so the spool cannot be drained on a
+            // later request — fall back to an inline send.
+            if ($delivery === 'spool' && $this->isServerless()) {
+                $delivery = 'direct';
+            }
+
+            return match ($delivery) {
+                'null' => new NullDispatcher,
+                'direct' => $app->make(DirectDispatcher::class),
+                default => new SpoolingDispatcher(
+                    spool: $app->make(Spool::class),
+                    fallback: $app->make(DirectDispatcher::class),
+                ),
+            };
+        });
+
         $this->app->singleton(Uptimex::class, function (Application $app): Uptimex {
             return new Uptimex(
                 config: $app['config'],
-                transport: $app->make(Transport::class),
+                dispatcher: $app->make(BatchDispatcher::class),
             );
         });
+    }
+
+    /**
+     * Bind the spool + drain graph: where finished batches rest on disk and
+     * how they are shipped to the server out of band.
+     */
+    private function registerSpoolServices(): void
+    {
+        $this->app->singleton(Clock::class, SystemClock::class);
+
+        $this->app->singleton(SpoolPathResolver::class, function (Application $app): SpoolPathResolver {
+            $path = $app['config']->get('uptimex.spool_path');
+
+            return new SpoolPathResolver(
+                is_string($path) && $path !== '' ? $path : storage_path('uptimex/spool')
+            );
+        });
+
+        $this->app->singleton(Spool::class, function (Application $app): Spool {
+            $config = $app['config'];
+
+            return new FilesystemSpool(
+                paths: $app->make(SpoolPathResolver::class),
+                clock: $app->make(Clock::class),
+                maxFiles: (int) $config->get('uptimex.spool_max_files', 10000),
+                maxBytes: (int) $config->get('uptimex.spool_max_bytes', 524288000),
+                retryBaseSeconds: (int) $config->get('uptimex.retry_base_seconds', 10),
+                retryMaxSeconds: (int) $config->get('uptimex.retry_max_seconds', 3600),
+            );
+        });
+
+        $this->app->singleton(Lock::class, function (Application $app): Lock {
+            return new FilesystemLock($app->make(SpoolPathResolver::class)->spoolDir());
+        });
+
+        $this->app->singleton(Drainer::class, function (Application $app): Drainer {
+            return new SpoolDrainer(
+                spool: $app->make(Spool::class),
+                transport: $app->make(Transport::class),
+                lock: $app->make(Lock::class),
+                clock: $app->make(Clock::class),
+                failfast: (int) $app['config']->get('uptimex.drain_failfast', 3),
+            );
+        });
+
+        $this->app->singleton(DrainTrigger::class, function (Application $app): DrainTrigger {
+            return new DrainTrigger(
+                drainer: $app->make(Drainer::class),
+                config: $app['config'],
+            );
+        });
+    }
+
+    /**
+     * Detect a serverless runtime (Vapor / AWS Lambda) where the local disk
+     * is ephemeral and the container freezes after the response.
+     */
+    private function isServerless(): bool
+    {
+        foreach (['VAPOR_SSM_PATH', 'VAPOR_ARTIFACT_NAME', 'AWS_LAMBDA_FUNCTION_NAME', 'LAMBDA_TASK_ROOT', 'AWS_EXECUTION_ENV'] as $marker) {
+            if (env($marker) !== null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function boot(): void
@@ -93,6 +211,7 @@ class UptimexServiceProvider extends ServiceProvider
                 TestCommand::class,
                 StatusCommand::class,
                 DeployCommand::class,
+                SpoolDrainCommand::class,
             ]);
         }
 
@@ -263,6 +382,22 @@ class UptimexServiceProvider extends ServiceProvider
                 }
             } catch (Throwable) {
                 // Swallow.
+            }
+        });
+
+        // After the response is sent and the request trace is flushed to the
+        // spool, opportunistically drain the spool — one request at a time,
+        // budget-capped. This is how the SDK self-drains with no extra
+        // process for the host application to run.
+        $this->app->terminating(function (): void {
+            try {
+                if ($this->app['config']->get('uptimex.delivery', 'spool') !== 'spool') {
+                    return;
+                }
+
+                $this->app->make(DrainTrigger::class)->runAfterResponse();
+            } catch (Throwable) {
+                // Swallow — draining must never break the host.
             }
         });
     }

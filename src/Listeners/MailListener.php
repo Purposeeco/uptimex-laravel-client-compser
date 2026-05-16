@@ -18,7 +18,7 @@ final class MailListener
 
     public function handle(MessageSent $event): void
     {
-        if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+        if (! $this->uptimex->isRecording()) {
             return;
         }
 

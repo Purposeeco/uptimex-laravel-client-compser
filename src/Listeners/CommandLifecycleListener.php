@@ -60,20 +60,23 @@ final class CommandLifecycleListener
                 return;
             }
 
-            $start = $this->startedAtByName[$name] ?? null;
-            $durationMs = $start !== null ? (int) round((microtime(true) - $start) * 1000) : null;
+            if ($this->uptimex->isRecording()) {
+                $start = $this->startedAtByName[$name] ?? null;
+                $durationMs = $start !== null ? (int) round((microtime(true) - $start) * 1000) : null;
+
+                $arguments = method_exists($event->input, '__toString') ? (string) $event->input : null;
+
+                $this->uptimex->record('command', [
+                    'name' => mb_substr($name, 0, 190),
+                    'arguments' => $arguments !== null ? ['raw' => mb_substr($arguments, 0, 2000)] : null,
+                    'exit_code' => (int) $event->exitCode,
+                    'output_excerpt' => $this->captureOutputExcerpt($event),
+                    'duration_ms' => $durationMs,
+                    'status' => $event->exitCode === 0 ? 'success' : 'failed',
+                ]);
+            }
+
             unset($this->startedAtByName[$name]);
-
-            $arguments = method_exists($event->input, '__toString') ? (string) $event->input : null;
-
-            $this->uptimex->record('command', [
-                'name' => mb_substr($name, 0, 190),
-                'arguments' => $arguments !== null ? ['raw' => mb_substr($arguments, 0, 2000)] : null,
-                'exit_code' => (int) $event->exitCode,
-                'output_excerpt' => $this->captureOutputExcerpt($event),
-                'duration_ms' => $durationMs,
-                'status' => $event->exitCode === 0 ? 'success' : 'failed',
-            ]);
         } finally {
             if ($this->uptimex->context()?->type === ExecutionContext::TYPE_COMMAND) {
                 $this->uptimex->endTrace($event->exitCode === 0 ? 'ok' : 'failed');

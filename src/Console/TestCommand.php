@@ -3,8 +3,8 @@
 namespace Uptimex\Client\Console;
 
 use Illuminate\Console\Command;
-use Uptimex\Client\Context\ExecutionContext;
-use Uptimex\Client\Uptimex;
+use Illuminate\Support\Str;
+use Uptimex\Client\Transport\Transport;
 
 class TestCommand extends Command
 {
@@ -12,9 +12,15 @@ class TestCommand extends Command
 
     protected $description = 'Send a synthetic event batch to UptimeX and print the result.';
 
-    public function handle(Uptimex $uptimex): int
+    /**
+     * Always performs a real, synchronous round-trip to the server —
+     * regardless of the configured `delivery` mode — so the command
+     * genuinely verifies the wire (token, URL, connectivity) rather than
+     * just confirming that a file was spooled.
+     */
+    public function handle(Transport $transport): int
     {
-        if (! $uptimex->isEnabled()) {
+        if (! config('uptimex.enabled', true) || empty(config('uptimex.token'))) {
             $this->error('UptimeX is not configured. Set UPTIMEX_TOKEN in your environment.');
 
             return self::FAILURE;
@@ -22,19 +28,24 @@ class TestCommand extends Command
 
         $this->info('Sending synthetic batch to '.config('uptimex.ingest_url').' ...');
 
-        $context = $uptimex->startTrace(ExecutionContext::TYPE_REQUEST, [
-            'source' => 'uptimex:test command',
-        ]);
+        $traceId = (string) Str::uuid7();
 
-        $uptimex->record('request', [
-            'duration_ms' => 1,
+        $ok = $transport->send([
+            'batch_uuid' => (string) Str::uuid(),
+            'sdk_version' => (string) config('uptimex.sdk_version', '0.1.0'),
+            'host' => config('uptimex.server') ?: (gethostname() ?: null),
+            'events' => [[
+                'type' => 'request',
+                'trace_id' => $traceId,
+                'occurred_at' => now()->toIso8601String(),
+                'duration_ms' => 1,
+                'source' => 'uptimex:test command',
+            ]],
         ]);
-
-        $ok = $uptimex->endTrace('ok');
 
         if ($ok) {
             $this->info('Batch accepted by UptimeX.');
-            $this->line('  trace_id: '.$context->traceId);
+            $this->line('  trace_id: '.$traceId);
 
             return self::SUCCESS;
         }

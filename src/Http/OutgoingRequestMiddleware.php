@@ -46,7 +46,7 @@ final class OutgoingRequestMiddleware
 
     public function onReceived(ResponseReceived $event): void
     {
-        if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+        if (! $this->uptimex->isRecording()) {
             return;
         }
 
@@ -60,7 +60,7 @@ final class OutgoingRequestMiddleware
 
     public function onConnectionFailed(ConnectionFailed $event): void
     {
-        if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+        if (! $this->uptimex->isRecording()) {
             return;
         }
 
@@ -100,7 +100,7 @@ final class OutgoingRequestMiddleware
 
     private function record(RequestInterface $request, ?ResponseInterface $response, ?float $startedAt): void
     {
-        if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+        if (! $this->uptimex->isRecording()) {
             return;
         }
 

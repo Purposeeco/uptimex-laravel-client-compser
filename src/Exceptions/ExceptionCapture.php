@@ -25,7 +25,7 @@ final class ExceptionCapture
 
     public function capture(Throwable $e): void
     {
-        if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+        if (! $this->uptimex->isRecording()) {
             return;
         }
 

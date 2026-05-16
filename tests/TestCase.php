@@ -3,6 +3,8 @@
 namespace Uptimex\Client\Tests;
 
 use Orchestra\Testbench\TestCase as Orchestra;
+use Uptimex\Client\Delivery\BatchDispatcher;
+use Uptimex\Client\Delivery\DirectDispatcher;
 use Uptimex\Client\Transport\NullTransport;
 use Uptimex\Client\Transport\Transport;
 use Uptimex\Client\UptimexServiceProvider;
@@ -27,8 +29,14 @@ abstract class TestCase extends Orchestra
         config()->set('uptimex.ingest_url', 'https://ingest.test');
         config()->set('uptimex.event_buffer', 500);
 
+        // Tests assert against what would have been sent. Route endTrace()
+        // through a DirectDispatcher wrapping the in-memory NullTransport so
+        // batches still land in $this->transport->sentBatches().
+        config()->set('uptimex.delivery', 'direct');
+
         $this->transport = new NullTransport;
 
         $app->instance(Transport::class, $this->transport);
+        $app->instance(BatchDispatcher::class, new DirectDispatcher($this->transport));
     }
 }

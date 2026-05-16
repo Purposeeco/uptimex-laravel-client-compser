@@ -63,7 +63,7 @@ final class CacheListener
 
     private function record(CacheEvent $event, string $type, ?int $ttl = null): void
     {
-        if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+        if (! $this->uptimex->isRecording()) {
             return;
         }
 

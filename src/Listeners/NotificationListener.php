@@ -22,7 +22,7 @@ final class NotificationListener
 
     private function record(string $class, string $channel, mixed $notifiable, string $status): void
     {
-        if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+        if (! $this->uptimex->isRecording()) {
             return;
         }
 

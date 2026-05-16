@@ -70,13 +70,15 @@ final class ScheduledTaskLifecycleListener
             $durationMs = $start !== null ? (int) round((microtime(true) - $start) * 1000) : null;
             unset($this->startedAtByName[$name]);
 
-            $this->uptimex->record('scheduled_task', [
-                'name' => mb_substr($name, 0, 190),
-                'expression' => isset($task->expression) ? mb_substr((string) $task->expression, 0, 64) : null,
-                'next_run_at' => $this->nextRunAt($task),
-                'duration_ms' => $durationMs,
-                'status' => $status,
-            ]);
+            if ($this->uptimex->isRecording()) {
+                $this->uptimex->record('scheduled_task', [
+                    'name' => mb_substr($name, 0, 190),
+                    'expression' => isset($task->expression) ? mb_substr((string) $task->expression, 0, 64) : null,
+                    'next_run_at' => $this->nextRunAt($task),
+                    'duration_ms' => $durationMs,
+                    'status' => $status,
+                ]);
+            }
         } finally {
             if ($this->uptimex->context()?->type === ExecutionContext::TYPE_SCHEDULED_TASK) {
                 $this->uptimex->endTrace($status === 'success' ? 'ok' : $status);

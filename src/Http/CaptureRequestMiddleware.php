@@ -62,7 +62,7 @@ final class CaptureRequestMiddleware
 
     public function terminate(Request $request, Response $response): void
     {
-        if (! $this->uptimex->isEnabled() || $this->shouldSkip($request)) {
+        if (! $this->uptimex->isRecording() || $this->shouldSkip($request)) {
             return;
         }
 

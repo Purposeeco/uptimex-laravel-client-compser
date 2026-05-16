@@ -7,6 +7,7 @@ use Uptimex\Client\Context\ExecutionContext;
 
 /**
  * @method static bool isEnabled()
+ * @method static bool isRecording()
  * @method static ?ExecutionContext context()
  * @method static ?float sampleRate()
  * @method static ExecutionContext startTrace(string $type, array $metadata = [])

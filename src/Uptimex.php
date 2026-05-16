@@ -9,7 +9,8 @@ use Illuminate\Support\Str;
 use Throwable;
 use Uptimex\Client\Buffer\EventBuffer;
 use Uptimex\Client\Context\ExecutionContext;
-use Uptimex\Client\Transport\Transport;
+use Uptimex\Client\Delivery\BatchDispatcher;
+use Uptimex\Client\Spool\SpooledBatch;
 
 /**
  * The SDK's public service. Holds the active execution context (one per
@@ -46,13 +47,26 @@ class Uptimex
 
     public function __construct(
         private readonly ConfigRepository $config,
-        private readonly Transport $transport,
+        private readonly BatchDispatcher $dispatcher,
     ) {}
 
     public function isEnabled(): bool
     {
         return (bool) $this->config->get('uptimex.enabled', true)
             && ! empty($this->config->get('uptimex.token'));
+    }
+
+    /**
+     * Whether events recorded right now will actually be captured — the SDK
+     * is enabled, a trace is open, and capture is not paused (a sampled-out
+     * trace counts as paused). Listeners call this BEFORE building a payload
+     * so a sampled-out trace costs next to nothing.
+     */
+    public function isRecording(): bool
+    {
+        return $this->isEnabled()
+            && $this->context !== null
+            && ! $this->isPaused();
     }
 
     public function context(): ?ExecutionContext
@@ -129,25 +143,22 @@ class Uptimex
             return true;
         }
 
-        $events = $this->buffer->flush();
-        $batch = [
-            'batch_uuid' => (string) Str::uuid(),
-            'sdk_version' => (string) $this->config->get('uptimex.sdk_version', '0.1.0'),
-            'host' => $this->config->get('uptimex.server') ?: gethostname() ?: null,
-            'sample_rate' => $this->traceSampleRate,
-            'context' => $this->snapshotContext(),
-            'events' => $events,
-        ];
+        $batch = new SpooledBatch(
+            batchUuid: (string) Str::uuid(),
+            sdkVersion: (string) $this->config->get('uptimex.sdk_version', '0.1.0'),
+            host: $this->config->get('uptimex.server') ?: (gethostname() ?: null),
+            sampleRate: $this->traceSampleRate,
+            context: $this->snapshotContext(),
+            events: $this->buffer->flush(),
+        );
 
-        try {
-            $ok = $this->transport->send($batch);
-        } catch (Throwable) {
-            $ok = false;
-        }
+        // Hand the finished batch to the configured delivery strategy
+        // (spool to disk by default). The dispatcher never throws.
+        $accepted = $this->dispatcher->dispatch($batch);
 
         $this->resetContext();
 
-        return $ok;
+        return $accepted;
     }
 
     /**

@@ -77,6 +77,61 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Delivery
+    |--------------------------------------------------------------------------
+    |
+    | How a finished telemetry batch leaves your application:
+    |
+    |   spool  (default) — the batch is written to a local file the instant
+    |                      the request ends (no network on the request path),
+    |                      then shipped to UptimeX out of band. A batch is
+    |                      removed only after the server confirms receipt, so
+    |                      telemetry survives ingest downtime, deploys and
+    |                      restarts. It drains itself on your app's own
+    |                      traffic — no worker or daemon for you to run.
+    |   direct          — send inline over HTTP at the end of the request
+    |                      (the pre-spool behaviour). Auto-selected on
+    |                      serverless runtimes (Vapor / Lambda).
+    |   null            — drop batches without touching the master switch.
+    */
+    'delivery' => env('UPTIMEX_DELIVERY', 'spool'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Spool
+    |--------------------------------------------------------------------------
+    |
+    | `spool_path` defaults to storage/uptimex/spool. The directory is
+    | self-bounding: once `spool_max_files` or `spool_max_bytes` is reached the
+    | oldest pending batches are dropped and the loss is logged loudly. The
+    | defaults are large on purpose — a disk-safety backstop, not a routine
+    | pressure valve.
+    */
+    'spool_path' => env('UPTIMEX_SPOOL_PATH'),
+    'spool_max_files' => (int) env('UPTIMEX_SPOOL_MAX_FILES', 10000),
+    'spool_max_bytes' => (int) env('UPTIMEX_SPOOL_MAX_BYTES', 524288000),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Drain
+    |--------------------------------------------------------------------------
+    |
+    | The spool is drained opportunistically after a response is sent — one
+    | request at a time, capped by `drain_max_batches` / `drain_max_ms` so a
+    | request never over-spends. Set `drain_auto` to false to turn the
+    | piggyback drain off (leaving `uptimex:spool:drain` as the only drainer).
+    | A failed send backs off exponentially between `retry_base_seconds` and
+    | `retry_max_seconds`.
+    */
+    'drain_auto' => (bool) env('UPTIMEX_DRAIN_AUTO', true),
+    'drain_max_batches' => (int) env('UPTIMEX_DRAIN_MAX_BATCHES', 20),
+    'drain_max_ms' => (int) env('UPTIMEX_DRAIN_MAX_MS', 750),
+    'drain_failfast' => (int) env('UPTIMEX_DRAIN_FAILFAST', 3),
+    'retry_base_seconds' => (int) env('UPTIMEX_RETRY_BASE', 10),
+    'retry_max_seconds' => (int) env('UPTIMEX_RETRY_MAX', 3600),
+
+    /*
+    |--------------------------------------------------------------------------
     | Hosts the SDK should never capture for
     |--------------------------------------------------------------------------
     |

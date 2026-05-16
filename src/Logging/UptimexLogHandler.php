@@ -28,7 +28,7 @@ final class UptimexLogHandler extends AbstractProcessingHandler
     protected function write(LogRecord $record): void
     {
         try {
-            if (! $this->uptimex->isEnabled() || $this->uptimex->context() === null) {
+            if (! $this->uptimex->isRecording()) {
                 return;
             }
 
