@@ -43,9 +43,9 @@ calls in one timeline.
 
 ## Why use it
 
-- **Zero-config defaults.** `composer require` + two env vars and you're
-  capturing telemetry. Auto-discovers the service provider; no code
-  changes in your app.
+- **Zero-config defaults.** `composer require`, set one env var — your
+  ingest token — and you're capturing telemetry. Auto-discovers the
+  service provider; no code changes in your app.
 - **Built for production.** Bounded buffers (drop-oldest on overflow),
   fail-closed timeouts (0.5 s default), exception swallowing in every
   listener — a bug in the SDK can never break your application.
@@ -70,11 +70,10 @@ calls in one timeline.
 composer require uptimex/laravel-client
 ```
 
-Set two env vars in your monitored app's `.env`:
+Set your ingest token in your monitored app's `.env`:
 
 ```dotenv
 UPTIMEX_TOKEN=utx_your_environment_token
-UPTIMEX_INGEST_URL=https://ingest.your-uptimex-server.com
 ```
 
 Smoke-test the connection:
@@ -86,7 +85,7 @@ php artisan uptimex:test
 Expected output:
 
 ```
-Sending synthetic batch to https://ingest.your-uptimex-server.com ...
+Sending synthetic batch to https://ingest.uptimex.tech ...
 Batch accepted by UptimeX.
   trace_id: 019df4c8-d721-7067-8c88-10a84081b445
 ```
@@ -108,11 +107,25 @@ php artisan vendor:publish --tag=uptimex-config
 |---|---|---|
 | `UPTIMEX_ENABLED` | `true` | Master switch — set `false` to disable in non-prod |
 | `UPTIMEX_TOKEN` | — | Environment-scoped ingest token from the UptimeX dashboard |
-| `UPTIMEX_INGEST_URL` | `https://ingest.uptimex.tech` | UptimeX server base URL |
 | `UPTIMEX_DEPLOY` | — | Release identifier (set by `uptimex:deploy`) |
 | `UPTIMEX_SERVER` | hostname | Optional server label shown in the dashboard |
 | `UPTIMEX_EVENT_BUFFER` | `500` | Max events buffered per execution context |
 | `UPTIMEX_FLUSH_TIMEOUT` | `0.5` | Seconds; HTTP timeout on flush |
+
+### Self-hosting
+
+The ingest URL is **not** an env var — it ships hardcoded in the package
+(`https://ingest.uptimex.tech`), so cloud customers never have to think
+about it and a stray `http://` can't leak telemetry in plaintext. Your
+ingest token, not the URL, is what routes data to your workspace.
+
+Running your own UptimeX server? Publish the config and point `ingest_url`
+at it:
+
+```php
+// config/uptimex.php
+'ingest_url' => 'https://ingest.your-uptimex-server.com',
+```
 
 ## Public API
 

@@ -15,7 +15,7 @@ class TestCommand extends Command
     public function handle(Uptimex $uptimex): int
     {
         if (! $uptimex->isEnabled()) {
-            $this->error('UptimeX is not configured. Set UPTIMEX_TOKEN and UPTIMEX_INGEST_URL in your environment.');
+            $this->error('UptimeX is not configured. Set UPTIMEX_TOKEN in your environment.');
 
             return self::FAILURE;
         }

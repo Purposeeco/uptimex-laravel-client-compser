@@ -127,10 +127,11 @@ it('sends a gzip-encoded JSON body with bearer auth', function () {
 
 it('upgrades an http:// ingest URL to https:// so telemetry never crosses the wire in plaintext', function () {
     $container = [];
-    // A customer who sets UPTIMEX_INGEST_URL=http://... must not be able to
-    // ship telemetry over plaintext. The SDK upgrades the scheme itself rather
-    // than trusting the operator — and rather than leaning on the server's
-    // 301, which Guzzle would turn into a POST→GET downgrade.
+    // The ingest URL ships hardcoded as HTTPS, but a self-hosted install can
+    // override it in a published config. An `http://` override must not be
+    // able to ship telemetry in plaintext — the SDK upgrades the scheme
+    // itself rather than leaning on the server's 301, which Guzzle would
+    // turn into a POST→GET downgrade.
     $transport = buildTransport(
         new MockHandler([new Response(202, [], '{}')]),
         $container,

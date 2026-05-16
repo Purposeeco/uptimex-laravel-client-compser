@@ -7,8 +7,8 @@ use Uptimex\Client\Transport\Transport;
 
 /**
  * Phase 8: invoked from CI / deployment tooling in monitored apps to record a
- * deploy. Reads UPTIMEX_TOKEN + UPTIMEX_INGEST_URL from the env. The server
- * stores the deploy and sweeps "resolve on next deploy" issues for the env.
+ * deploy. Reads UPTIMEX_TOKEN from the env. The server stores the deploy and
+ * sweeps "resolve on next deploy" issues for the env.
  */
 class DeployCommand extends Command
 {
@@ -23,7 +23,7 @@ class DeployCommand extends Command
     public function handle(Transport $transport): int
     {
         if (! config('uptimex.enabled', true) || empty(config('uptimex.token'))) {
-            $this->error('UptimeX is not configured. Set UPTIMEX_TOKEN and UPTIMEX_INGEST_URL.');
+            $this->error('UptimeX is not configured. Set UPTIMEX_TOKEN.');
 
             return self::FAILURE;
         }
