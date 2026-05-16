@@ -17,22 +17,33 @@ use Throwable;
  * infrastructure, not bookkeeping. A dropped batch is acceptable; a thrown
  * exception bubbling into the host's request handler is not.
  *
- * Redirects are deliberately NOT followed. UptimeX servers force HTTPS, so a
- * misconfigured `http://` UPTIMEX_INGEST_URL would otherwise hit a 301 →
- * Guzzle silently downgrades the POST to a GET while following it → the
- * server answers 405 "GET not supported". That symptom is three hops removed
- * from the cause. With redirects off, the SDK sees the raw 3xx and logs an
- * actionable hint instead.
+ * The ingest URL scheme is forced to HTTPS in the constructor. UPTIMEX_INGEST_URL
+ * is operator-supplied and the single most common misconfiguration is an
+ * `http://` scheme — rather than trust the operator to get it right, an
+ * `http://` URL is silently upgraded so telemetry never crosses the wire in
+ * plaintext. Genuinely-local dev hosts (localhost, 127.0.0.1, *.test,
+ * *.localhost) are exempt: they legitimately run without a TLS cert under
+ * `artisan serve` or Herd.
+ *
+ * Redirects are still deliberately NOT followed, as defense-in-depth. If a URL
+ * slips past normalization that the server answers with a 3xx, Guzzle would
+ * silently downgrade the POST to a GET while following it → the server answers
+ * 405 "GET not supported", a symptom three hops removed from the cause. With
+ * redirects off, the SDK sees the raw 3xx and logs an actionable hint instead.
  */
 final class HttpTransport implements Transport
 {
+    private readonly string $ingestUrl;
+
     public function __construct(
         private readonly Client $http,
-        private readonly string $ingestUrl,
+        string $ingestUrl,
         private readonly string $token,
         private readonly float $timeout = 0.5,
         private readonly float $connectTimeout = 0.5,
-    ) {}
+    ) {
+        $this->ingestUrl = $this->normalizeIngestUrl($ingestUrl);
+    }
 
     public function send(array $batch): bool
     {
@@ -108,6 +119,37 @@ final class HttpTransport implements Transport
 
             return null;
         }
+    }
+
+    /**
+     * Force the ingest URL onto HTTPS.
+     *
+     * UPTIMEX_INGEST_URL is operator-supplied, and an `http://` scheme is the
+     * single most common misconfiguration — it ships telemetry in plaintext
+     * and trips the server's HTTPS redirect. Rather than trust the operator to
+     * get it right, an `http://` URL is upgraded here. Genuinely-local dev
+     * hosts (localhost, 127.0.0.1, ::1, *.localhost, *.test) are exempt: they
+     * legitimately run without a TLS cert under `artisan serve` or Herd.
+     */
+    private function normalizeIngestUrl(string $url): string
+    {
+        $url = trim($url);
+
+        if (! str_starts_with(strtolower($url), 'http://')) {
+            return $url;
+        }
+
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+
+        $isLocalHost = in_array($host, ['localhost', '127.0.0.1', '::1'], true)
+            || str_ends_with($host, '.localhost')
+            || str_ends_with($host, '.test');
+
+        if ($isLocalHost) {
+            return $url;
+        }
+
+        return 'https://'.substr($url, 7);
     }
 
     /**

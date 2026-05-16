@@ -9,14 +9,14 @@ use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use Uptimex\Client\Transport\HttpTransport;
 
-function buildTransport(MockHandler $mock, array &$container = []): HttpTransport
+function buildTransport(MockHandler $mock, array &$container = [], string $ingestUrl = 'https://ingest.test'): HttpTransport
 {
     $stack = HandlerStack::create($mock);
     $stack->push(Middleware::history($container));
 
     return new HttpTransport(
         http: new Client(['handler' => $stack]),
-        ingestUrl: 'https://ingest.test',
+        ingestUrl: $ingestUrl,
         token: 'utx_test',
         timeout: 0.5,
         connectTimeout: 0.5,
@@ -124,3 +124,44 @@ it('sends a gzip-encoded JSON body with bearer auth', function () {
     $decoded = gzdecode((string) $request->getBody());
     expect(json_decode($decoded, true)['events'][0]['type'])->toBe('request');
 });
+
+it('upgrades an http:// ingest URL to https:// so telemetry never crosses the wire in plaintext', function () {
+    $container = [];
+    // A customer who sets UPTIMEX_INGEST_URL=http://... must not be able to
+    // ship telemetry over plaintext. The SDK upgrades the scheme itself rather
+    // than trusting the operator — and rather than leaning on the server's
+    // 301, which Guzzle would turn into a POST→GET downgrade.
+    $transport = buildTransport(
+        new MockHandler([new Response(202, [], '{}')]),
+        $container,
+        'http://ingest.uptimex.tech',
+    );
+
+    $transport->send(['events' => [['type' => 'request', 'trace_id' => 'abc']]]);
+
+    expect($container)->toHaveCount(1);
+    $uri = $container[0]['request']->getUri();
+    expect($uri->getScheme())->toBe('https')
+        ->and($uri->getHost())->toBe('ingest.uptimex.tech')
+        ->and($uri->getPath())->toBe('/api/ingest/events');
+});
+
+it('leaves http:// alone for genuinely-local dev hosts', function (string $ingestUrl) {
+    // localhost / 127.0.0.1 / *.test run without a TLS cert under
+    // `artisan serve` or Herd — forcing HTTPS there would break local dev.
+    $container = [];
+    $transport = buildTransport(
+        new MockHandler([new Response(202, [], '{}')]),
+        $container,
+        $ingestUrl,
+    );
+
+    $transport->send(['events' => []]);
+
+    expect($container[0]['request']->getUri()->getScheme())->toBe('http');
+})->with([
+    'http://localhost',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://uptimex.test',
+]);
