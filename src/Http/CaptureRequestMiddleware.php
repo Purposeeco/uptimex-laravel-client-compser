@@ -5,6 +5,7 @@ namespace Uptimex\Client\Http;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 use Uptimex\Client\Context\ExecutionContext;
 use Uptimex\Client\Uptimex;
 
@@ -41,20 +42,22 @@ final class CaptureRequestMiddleware
 
     public function handle(Request $request, Closure $next): Response
     {
-        if ($this->shouldSkip($request)) {
-            return $next($request);
-        }
+        try {
+            if (! $this->shouldSkip($request)) {
+                // Laravel may resolve a different middleware instance for terminate()
+                // than for handle() (the kernel re-resolves through the container).
+                // Stash the start time on the request attributes so it survives that.
+                $request->attributes->set('uptimex.request_started_at', microtime(true));
 
-        // Laravel may resolve a different middleware instance for terminate() than for
-        // handle() (the kernel re-resolves through the container). Stash the start time
-        // on the request attributes so it survives the instance swap.
-        $request->attributes->set('uptimex.request_started_at', microtime(true));
-
-        if ($this->uptimex->isEnabled() && $this->uptimex->context() === null) {
-            $this->uptimex->startTrace(ExecutionContext::TYPE_REQUEST, [
-                'method' => $request->method(),
-                'path' => $request->path(),
-            ]);
+                if ($this->uptimex->isEnabled() && $this->uptimex->context() === null) {
+                    $this->uptimex->startTrace(ExecutionContext::TYPE_REQUEST, [
+                        'method' => $request->method(),
+                        'path' => $request->path(),
+                    ]);
+                }
+            }
+        } catch (Throwable) {
+            // Telemetry setup must never break the host request.
         }
 
         return $next($request);
@@ -62,25 +65,29 @@ final class CaptureRequestMiddleware
 
     public function terminate(Request $request, Response $response): void
     {
-        if (! $this->uptimex->isRecording() || $this->shouldSkip($request)) {
-            return;
+        try {
+            if (! $this->uptimex->isRecording() || $this->shouldSkip($request)) {
+                return;
+            }
+
+            $startedAt = (float) $request->attributes->get('uptimex.request_started_at', microtime(true));
+            $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+
+            $this->uptimex->record('request', [
+                'duration_ms' => $durationMs,
+                'method' => $request->method(),
+                'route' => optional($request->route())->getName() ?? optional($request->route())->uri(),
+                'path' => '/'.ltrim($request->path(), '/'),
+                'status' => $response->getStatusCode(),
+                'ip' => $request->ip(),
+                'user_agent' => substr((string) $request->userAgent(), 0, 512),
+                'headers' => $this->captureHeaders($request),
+                'payload' => $this->capturePayload($request),
+                'user_id' => optional($request->user())->getAuthIdentifier(),
+            ]);
+        } catch (Throwable) {
+            // Telemetry must never break the host request lifecycle.
         }
-
-        $startedAt = (float) $request->attributes->get('uptimex.request_started_at', microtime(true));
-        $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
-
-        $this->uptimex->record('request', [
-            'duration_ms' => $durationMs,
-            'method' => $request->method(),
-            'route' => optional($request->route())->getName() ?? optional($request->route())->uri(),
-            'path' => '/'.ltrim($request->path(), '/'),
-            'status' => $response->getStatusCode(),
-            'ip' => $request->ip(),
-            'user_agent' => substr((string) $request->userAgent(), 0, 512),
-            'headers' => $this->captureHeaders($request),
-            'payload' => $this->capturePayload($request),
-            'user_id' => optional($request->user())->getAuthIdentifier(),
-        ]);
     }
 
     /**

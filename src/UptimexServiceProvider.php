@@ -228,36 +228,54 @@ class UptimexServiceProvider extends ServiceProvider
         $this->registerOutgoingRequestListeners();
     }
 
+    /**
+     * Register an event listener whose handler can NEVER throw into the host
+     * application. Telemetry is observability — if a listener fails (a bug, a
+     * version skew, anything at all) the host must not even notice. Every SDK
+     * event listener is registered through here, so it is structurally
+     * impossible for the SDK to break the host via an event listener.
+     */
+    private function listenSafely(string $event, string $listener, string $method): void
+    {
+        Event::listen($event, function (object $eventObject) use ($listener, $method): void {
+            try {
+                $this->app->make($listener)->{$method}($eventObject);
+            } catch (Throwable) {
+                // Observability code must never break the host application.
+            }
+        });
+    }
+
     private function registerCommandLifecycleListeners(): void
     {
-        Event::listen(CommandStarting::class, [CommandLifecycleListener::class, 'onStarting']);
-        Event::listen(CommandFinished::class, [CommandLifecycleListener::class, 'onFinished']);
+        $this->listenSafely(CommandStarting::class, CommandLifecycleListener::class, 'onStarting');
+        $this->listenSafely(CommandFinished::class, CommandLifecycleListener::class, 'onFinished');
     }
 
     private function registerScheduledTaskLifecycleListeners(): void
     {
-        Event::listen(ScheduledTaskStarting::class, [ScheduledTaskLifecycleListener::class, 'onStarting']);
-        Event::listen(ScheduledTaskFinished::class, [ScheduledTaskLifecycleListener::class, 'onFinished']);
-        Event::listen(ScheduledTaskFailed::class, [ScheduledTaskLifecycleListener::class, 'onFailed']);
-        Event::listen(ScheduledTaskSkipped::class, [ScheduledTaskLifecycleListener::class, 'onSkipped']);
+        $this->listenSafely(ScheduledTaskStarting::class, ScheduledTaskLifecycleListener::class, 'onStarting');
+        $this->listenSafely(ScheduledTaskFinished::class, ScheduledTaskLifecycleListener::class, 'onFinished');
+        $this->listenSafely(ScheduledTaskFailed::class, ScheduledTaskLifecycleListener::class, 'onFailed');
+        $this->listenSafely(ScheduledTaskSkipped::class, ScheduledTaskLifecycleListener::class, 'onSkipped');
     }
 
     private function registerMailListener(): void
     {
-        Event::listen(MessageSent::class, [MailListener::class, 'handle']);
+        $this->listenSafely(MessageSent::class, MailListener::class, 'handle');
     }
 
     private function registerNotificationListener(): void
     {
-        Event::listen(NotificationSent::class, [NotificationListener::class, 'onSent']);
-        Event::listen(NotificationFailed::class, [NotificationListener::class, 'onFailed']);
+        $this->listenSafely(NotificationSent::class, NotificationListener::class, 'onSent');
+        $this->listenSafely(NotificationFailed::class, NotificationListener::class, 'onFailed');
     }
 
     private function registerOutgoingRequestListeners(): void
     {
-        Event::listen(RequestSending::class, [OutgoingRequestMiddleware::class, 'onSending']);
-        Event::listen(ResponseReceived::class, [OutgoingRequestMiddleware::class, 'onReceived']);
-        Event::listen(ConnectionFailed::class, [OutgoingRequestMiddleware::class, 'onConnectionFailed']);
+        $this->listenSafely(RequestSending::class, OutgoingRequestMiddleware::class, 'onSending');
+        $this->listenSafely(ResponseReceived::class, OutgoingRequestMiddleware::class, 'onReceived');
+        $this->listenSafely(ConnectionFailed::class, OutgoingRequestMiddleware::class, 'onConnectionFailed');
     }
 
     /**
@@ -267,11 +285,11 @@ class UptimexServiceProvider extends ServiceProvider
      */
     private function registerJobLifecycleListeners(): void
     {
-        Event::listen(JobQueued::class, [JobLifecycleListener::class, 'onQueued']);
-        Event::listen(JobProcessing::class, [JobLifecycleListener::class, 'onProcessing']);
-        Event::listen(JobProcessed::class, [JobLifecycleListener::class, 'onProcessed']);
-        Event::listen(JobReleasedAfterException::class, [JobLifecycleListener::class, 'onReleased']);
-        Event::listen(JobFailed::class, [JobLifecycleListener::class, 'onFailed']);
+        $this->listenSafely(JobQueued::class, JobLifecycleListener::class, 'onQueued');
+        $this->listenSafely(JobProcessing::class, JobLifecycleListener::class, 'onProcessing');
+        $this->listenSafely(JobProcessed::class, JobLifecycleListener::class, 'onProcessed');
+        $this->listenSafely(JobReleasedAfterException::class, JobLifecycleListener::class, 'onReleased');
+        $this->listenSafely(JobFailed::class, JobLifecycleListener::class, 'onFailed');
     }
 
     /**
@@ -281,10 +299,10 @@ class UptimexServiceProvider extends ServiceProvider
      */
     private function registerCacheListeners(): void
     {
-        Event::listen(CacheHit::class, [CacheListener::class, 'onHit']);
-        Event::listen(CacheMissed::class, [CacheListener::class, 'onMissed']);
-        Event::listen(KeyWritten::class, [CacheListener::class, 'onWritten']);
-        Event::listen(KeyForgotten::class, [CacheListener::class, 'onForgotten']);
+        $this->listenSafely(CacheHit::class, CacheListener::class, 'onHit');
+        $this->listenSafely(CacheMissed::class, CacheListener::class, 'onMissed');
+        $this->listenSafely(KeyWritten::class, CacheListener::class, 'onWritten');
+        $this->listenSafely(KeyForgotten::class, CacheListener::class, 'onForgotten');
     }
 
     /**
@@ -315,7 +333,7 @@ class UptimexServiceProvider extends ServiceProvider
      */
     private function registerQueryListener(): void
     {
-        Event::listen(QueryExecuted::class, [QueryListener::class, 'handle']);
+        $this->listenSafely(QueryExecuted::class, QueryListener::class, 'handle');
     }
 
     /**

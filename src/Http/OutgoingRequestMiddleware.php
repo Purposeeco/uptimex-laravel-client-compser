@@ -100,24 +100,28 @@ final class OutgoingRequestMiddleware
 
     private function record(RequestInterface $request, ?ResponseInterface $response, ?float $startedAt): void
     {
-        if (! $this->uptimex->isRecording()) {
-            return;
+        try {
+            if (! $this->uptimex->isRecording()) {
+                return;
+            }
+
+            $uri = $request->getUri();
+            $host = (string) $uri->getHost();
+            $url = $uri->getScheme().'://'.$host.$uri->getPath();
+
+            $duration = $startedAt !== null ? (int) round((microtime(true) - $startedAt) * 1000) : null;
+
+            $this->uptimex->record('outgoing_request', [
+                'host' => mb_substr($host !== '' ? $host : '(unknown)', 0, 255),
+                'method' => mb_substr($request->getMethod(), 0, 8),
+                'url' => mb_substr($url, 0, 2048),
+                'status' => $response?->getStatusCode(),
+                'duration_ms' => $duration,
+                'request_size_bytes' => $request->getBody()->getSize(),
+                'response_size_bytes' => $response?->getBody()?->getSize(),
+            ]);
+        } catch (Throwable) {
+            // Telemetry must never break the host's outgoing HTTP call.
         }
-
-        $uri = $request->getUri();
-        $host = (string) $uri->getHost();
-        $url = $uri->getScheme().'://'.$host.$uri->getPath();
-
-        $duration = $startedAt !== null ? (int) round((microtime(true) - $startedAt) * 1000) : null;
-
-        $this->uptimex->record('outgoing_request', [
-            'host' => mb_substr($host !== '' ? $host : '(unknown)', 0, 255),
-            'method' => mb_substr($request->getMethod(), 0, 8),
-            'url' => mb_substr($url, 0, 2048),
-            'status' => $response?->getStatusCode(),
-            'duration_ms' => $duration,
-            'request_size_bytes' => $request->getBody()->getSize(),
-            'response_size_bytes' => $response?->getBody()?->getSize(),
-        ]);
     }
 }
