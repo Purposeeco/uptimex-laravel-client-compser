@@ -146,24 +146,23 @@ install or run; it works on every host, serverless included.
 ### The agent (opt-in)
 
 High-traffic apps can move the network send off the request process
-entirely. Set `UPTIMEX_DELIVERY=agent` and run the `uptimex:agent`
-daemon: the request then only writes the batch to a local loopback
-socket — a microsecond-scale write — and the daemon ships it out of
-band, buffering in memory and retrying through outages.
-
-The daemon is a long-lived process and must be supervised. Generate the
-Supervisor / systemd config (and the Laravel Forge "Daemon" command)
-with:
+entirely. Set `UPTIMEX_DELIVERY=agent` and run the agent daemon:
 
 ```bash
-php artisan uptimex:install
+php artisan uptimex:agent
 ```
 
-It drains gracefully on `SIGTERM`, so restarting it on deploy loses
-nothing. If `agent` is set but no agent is listening, the SDK falls back
-to a direct send — so it is always safe. Serverless runtimes (Vapor /
-Lambda), where no long-lived process can run, stay on direct delivery
-automatically.
+The request then only writes the batch to a local loopback socket — a
+microsecond-scale write — and the daemon ships it out of band, buffering
+in memory and retrying through outages. It drains gracefully on
+`SIGTERM`, so restarting it on deploy loses nothing.
+
+In production, keep the daemon alive with a process monitor — a
+Supervisor program, a `systemd` unit, or a Laravel Forge **Daemon**
+running `php artisan uptimex:agent` — exactly as you would Horizon or a
+queue worker. If `agent` is set but no agent is listening, the SDK falls
+back to a direct send, so it is always safe. Serverless runtimes (Vapor
+/ Lambda) stay on direct delivery automatically.
 
 Check delivery status — including whether the agent is reachable — any
 time:
@@ -207,7 +206,6 @@ SDK detects it and leaves yours untouched.
 | `php artisan uptimex:status` | Print the resolved SDK config; in `agent` mode, also report whether the agent is reachable. |
 | `php artisan uptimex:deploy <ref>` | Post a deployment marker — see [Deployment markers](#deployment-markers). |
 | `php artisan uptimex:agent` | Run the telemetry agent daemon. Needed only for the opt-in `agent` delivery mode. |
-| `php artisan uptimex:install` | Generate Supervisor / systemd config to run `uptimex:agent` as a supervised daemon. |
 
 ## Public API
 

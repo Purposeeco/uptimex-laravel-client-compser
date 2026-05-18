@@ -36,7 +36,6 @@ use Throwable;
 use Uptimex\Client\Agent\AgentClient;
 use Uptimex\Client\Console\AgentCommand;
 use Uptimex\Client\Console\DeployCommand;
-use Uptimex\Client\Console\InstallCommand;
 use Uptimex\Client\Console\StatusCommand;
 use Uptimex\Client\Console\TestCommand;
 use Uptimex\Client\Context\ExecutionContext;
@@ -191,7 +190,6 @@ class UptimexServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 AgentCommand::class,
-                InstallCommand::class,
                 TestCommand::class,
                 StatusCommand::class,
                 DeployCommand::class,

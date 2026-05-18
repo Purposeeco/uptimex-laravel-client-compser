@@ -49,7 +49,7 @@ it('never traces an SDK or scheduler-dispatcher command', function (string $comm
     'uptimex:test',
     'uptimex:status',
     'uptimex:agent',
-    'uptimex:install',
+    'uptimex:deploy',
     'schedule:run',
     'schedule:work',
 ]);

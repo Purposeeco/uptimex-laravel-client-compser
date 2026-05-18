@@ -88,11 +88,10 @@ return [
     |   agent            — hand the batch to a local `uptimex:agent` daemon
     |                      over a loopback socket (a microsecond-scale write,
     |                      no network on the request path); the daemon ships it
-    |                      out of band and retries through outages. The daemon
-    |                      must be run and supervised — `php artisan
-    |                      uptimex:install` generates the config. Falls back to
-    |                      `direct` if no agent is listening, so it is always
-    |                      safe to enable.
+    |                      out of band and retries through outages. Run it with
+    |                      `php artisan uptimex:agent`, kept alive by a process
+    |                      monitor. Falls back to `direct` if no agent is
+    |                      listening, so it is always safe to enable.
     |
     | To turn telemetry off entirely, use the `enabled` master switch above.
     */
