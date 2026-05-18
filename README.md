@@ -49,8 +49,9 @@ calls in one timeline.
   ingest token — and you're capturing telemetry. Auto-discovers the
   service provider; no code changes in your app.
 - **Built for production.** Bounded buffers (drop-oldest on overflow),
-  fail-closed timeouts (0.5 s default), exception swallowing in every
-  listener — a bug in the SDK can never break your application.
+  fail-closed timeouts (0.5 s default), throttled failure logging (the
+  SDK never floods your log), exception swallowing in every listener —
+  a bug in the SDK can never break your application.
 - **Privacy-first.** PII redaction for log context and request payloads
   out of the box, with hooks for adding your own redactors per event
   type. No fixed allow-list of fields; you decide what's sensitive.
@@ -194,6 +195,16 @@ UPTIMEX_LOG_LEVEL=warning
 
 Already have a `uptimex` channel defined in `config/logging.php`? The
 SDK detects it and leaves yours untouched.
+
+## Artisan commands
+
+| Command | What it does |
+|---|---|
+| `php artisan uptimex:test` | Send a synthetic batch to UptimeX and print the result — a real round-trip that verifies your token, URL and connectivity. |
+| `php artisan uptimex:status` | Print the resolved SDK config; in `agent` mode, also report whether the agent is reachable. |
+| `php artisan uptimex:deploy <ref>` | Post a deployment marker — see [Deployment markers](#deployment-markers). |
+| `php artisan uptimex:agent` | Run the telemetry agent daemon. Needed only for the opt-in `agent` delivery mode. |
+| `php artisan uptimex:install` | Generate Supervisor / systemd config to run `uptimex:agent` as a supervised daemon. |
 
 ## Public API
 
