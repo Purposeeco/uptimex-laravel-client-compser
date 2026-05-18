@@ -21,6 +21,15 @@ it('exposes no UPTIMEX_INGEST_URL env override in the config file', function () 
     expect($source)->not->toContain('UPTIMEX_INGEST_URL');
 });
 
+it('keeps the agent retry bounds out of env reach', function () {
+    // retry_base/retry_max govern load against UptimeX's ingest, not the
+    // host app — they are fixed constants, never env-tunable.
+    $source = file_get_contents(__DIR__.'/../../config/uptimex.php');
+
+    expect($source)->not->toContain('UPTIMEX_RETRY_BASE')
+        ->and($source)->not->toContain('UPTIMEX_RETRY_MAX');
+});
+
 it('defaults the delivery mode to direct in the published config', function () {
     $source = file_get_contents(__DIR__.'/../../config/uptimex.php');
 

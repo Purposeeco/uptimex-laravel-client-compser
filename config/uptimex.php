@@ -93,7 +93,8 @@ return [
     |                      uptimex:install` generates the config. Falls back to
     |                      `direct` if no agent is listening, so it is always
     |                      safe to enable.
-    |   null             — drop batches without touching the master switch.
+    |
+    | To turn telemetry off entirely, use the `enabled` master switch above.
     */
     'delivery' => env('UPTIMEX_DELIVERY', 'direct'),
 
@@ -110,13 +111,17 @@ return [
     | The agent buffers up to `agent_max_queue` batches in memory and ships
     | them `agent_ship_batch_size` at a time; on a failed send it backs off
     | exponentially between `retry_base_seconds` and `retry_max_seconds`.
+    |
+    | The retry bounds are deliberately NOT env-driven: they govern how hard
+    | the agent retries against UptimeX's ingest — a platform concern, not a
+    | per-app knob a customer should be able to turn into a retry storm.
     */
     'agent_address' => env('UPTIMEX_AGENT_ADDRESS', '127.0.0.1:9237'),
     'agent_connect_timeout_ms' => (int) env('UPTIMEX_AGENT_CONNECT_TIMEOUT_MS', 50),
     'agent_max_queue' => (int) env('UPTIMEX_AGENT_MAX_QUEUE', 10000),
     'agent_ship_batch_size' => (int) env('UPTIMEX_AGENT_SHIP_BATCH', 20),
-    'retry_base_seconds' => (int) env('UPTIMEX_RETRY_BASE', 5),
-    'retry_max_seconds' => (int) env('UPTIMEX_RETRY_MAX', 300),
+    'retry_base_seconds' => 5,
+    'retry_max_seconds' => 300,
 
     /*
     |--------------------------------------------------------------------------

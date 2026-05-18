@@ -112,7 +112,6 @@ class UptimexServiceProvider extends ServiceProvider
             }
 
             return match ($delivery) {
-                'null' => new NullDispatcher,
                 'agent' => new SocketDispatcher(
                     agent: $app->make(AgentClient::class),
                     fallback: $app->make(DirectDispatcher::class),

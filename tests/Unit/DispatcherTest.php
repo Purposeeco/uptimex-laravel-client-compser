@@ -40,8 +40,8 @@ it('resolves the BatchDispatcher the configured delivery mode selects', function
 
     expect(app(BatchDispatcher::class))->toBeInstanceOf($expected);
 })->with([
-    'direct'              => ['direct', DirectDispatcher::class],
-    'agent'               => ['agent', SocketDispatcher::class],
-    'null'                => ['null', NullDispatcher::class],
-    'unknown → direct'    => ['something-else', DirectDispatcher::class],
+    'direct'                => ['direct', DirectDispatcher::class],
+    'agent'                 => ['agent', SocketDispatcher::class],
+    'retired null → direct' => ['null', DirectDispatcher::class],
+    'unknown → direct'      => ['something-else', DirectDispatcher::class],
 ]);
