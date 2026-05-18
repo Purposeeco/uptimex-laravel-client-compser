@@ -33,18 +33,16 @@ use Illuminate\Queue\Events\JobReleasedAfterException;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Throwable;
+use Uptimex\Client\Agent\AgentClient;
+use Uptimex\Client\Console\AgentCommand;
 use Uptimex\Client\Console\DeployCommand;
-use Uptimex\Client\Console\SpoolDrainCommand;
 use Uptimex\Client\Console\StatusCommand;
 use Uptimex\Client\Console\TestCommand;
 use Uptimex\Client\Context\ExecutionContext;
 use Uptimex\Client\Delivery\BatchDispatcher;
 use Uptimex\Client\Delivery\DirectDispatcher;
 use Uptimex\Client\Delivery\NullDispatcher;
-use Uptimex\Client\Delivery\SpoolingDispatcher;
-use Uptimex\Client\Drain\Drainer;
-use Uptimex\Client\Drain\DrainTrigger;
-use Uptimex\Client\Drain\SpoolDrainer;
+use Uptimex\Client\Delivery\SocketDispatcher;
 use Uptimex\Client\Exceptions\ExceptionCapture;
 use Uptimex\Client\Http\CaptureRequestMiddleware;
 use Uptimex\Client\Http\OutgoingRequestMiddleware;
@@ -55,12 +53,8 @@ use Uptimex\Client\Listeners\MailListener;
 use Uptimex\Client\Listeners\NotificationListener;
 use Uptimex\Client\Listeners\QueryListener;
 use Uptimex\Client\Listeners\ScheduledTaskLifecycleListener;
-use Uptimex\Client\Spool\FilesystemSpool;
-use Uptimex\Client\Spool\Spool;
-use Uptimex\Client\Spool\SpoolPathResolver;
+use Uptimex\Client\Logging\UptimexLogChannel;
 use Uptimex\Client\Support\Clock;
-use Uptimex\Client\Support\FilesystemLock;
-use Uptimex\Client\Support\Lock;
 use Uptimex\Client\Support\SystemClock;
 use Uptimex\Client\Transport\HttpTransport;
 use Uptimex\Client\Transport\NullTransport;
@@ -73,7 +67,7 @@ class UptimexServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/uptimex.php', 'uptimex');
 
         // The low-level HTTP wire. It is no longer called from the request
-        // path — only the drainer uses it to ship spooled batches.
+        // path — only the agent daemon's shipper uses it.
         $this->app->singleton(Transport::class, function (Application $app): Transport {
             $config = $app['config'];
 
@@ -91,7 +85,8 @@ class UptimexServiceProvider extends ServiceProvider
             );
         });
 
-        $this->registerSpoolServices();
+        $this->registerAgentServices();
+        $this->registerLogChannel();
 
         // DirectDispatcher is also bound concretely so `uptimex:test` can
         // demand a real synchronous round-trip regardless of `delivery`.
@@ -107,20 +102,19 @@ class UptimexServiceProvider extends ServiceProvider
                 return new NullDispatcher;
             }
 
-            $delivery = (string) $config->get('uptimex.delivery', 'spool');
+            $delivery = (string) $config->get('uptimex.delivery', 'agent');
 
-            // Serverless runtimes (Vapor / Lambda) have ephemeral disk and
-            // freeze after the response, so the spool cannot be drained on a
-            // later request — fall back to an inline send.
-            if ($delivery === 'spool' && $this->isServerless()) {
+            // Serverless runtimes (Vapor / Lambda) cannot host a persistent
+            // agent, so deliver inline at the end of the request instead.
+            if ($delivery === 'agent' && $this->isServerless()) {
                 $delivery = 'direct';
             }
 
             return match ($delivery) {
                 'null' => new NullDispatcher,
                 'direct' => $app->make(DirectDispatcher::class),
-                default => new SpoolingDispatcher(
-                    spool: $app->make(Spool::class),
+                default => new SocketDispatcher(
+                    agent: $app->make(AgentClient::class),
                     fallback: $app->make(DirectDispatcher::class),
                 ),
             };
@@ -135,54 +129,42 @@ class UptimexServiceProvider extends ServiceProvider
     }
 
     /**
-     * Bind the spool + drain graph: where finished batches rest on disk and
-     * how they are shipped to the server out of band.
+     * Bind the agent client — the SDK's loopback-socket handle to the local
+     * `uptimex:agent` daemon. `Clock` is shared with the agent and tests.
      */
-    private function registerSpoolServices(): void
+    private function registerAgentServices(): void
     {
         $this->app->singleton(Clock::class, SystemClock::class);
 
-        $this->app->singleton(SpoolPathResolver::class, function (Application $app): SpoolPathResolver {
-            $path = $app['config']->get('uptimex.spool_path');
-
-            return new SpoolPathResolver(
-                is_string($path) && $path !== '' ? $path : storage_path('uptimex/spool')
-            );
-        });
-
-        $this->app->singleton(Spool::class, function (Application $app): Spool {
+        $this->app->singleton(AgentClient::class, function (Application $app): AgentClient {
             $config = $app['config'];
 
-            return new FilesystemSpool(
-                paths: $app->make(SpoolPathResolver::class),
-                clock: $app->make(Clock::class),
-                maxFiles: (int) $config->get('uptimex.spool_max_files', 10000),
-                maxBytes: (int) $config->get('uptimex.spool_max_bytes', 524288000),
-                retryBaseSeconds: (int) $config->get('uptimex.retry_base_seconds', 10),
-                retryMaxSeconds: (int) $config->get('uptimex.retry_max_seconds', 3600),
+            return new AgentClient(
+                address: (string) $config->get('uptimex.agent_address', '127.0.0.1:9237'),
+                connectTimeoutMs: (int) $config->get('uptimex.agent_connect_timeout_ms', 50),
             );
         });
+    }
 
-        $this->app->singleton(Lock::class, function (Application $app): Lock {
-            return new FilesystemLock($app->make(SpoolPathResolver::class)->spoolDir());
-        });
+    /**
+     * Auto-register the `uptimex` log channel into the host's logging config
+     * so capturing logs needs no `config/logging.php` edit — the operator
+     * just adds `uptimex` to LOG_STACK. A host-defined channel of the same
+     * name is left untouched.
+     */
+    private function registerLogChannel(): void
+    {
+        $config = $this->app['config'];
 
-        $this->app->singleton(Drainer::class, function (Application $app): Drainer {
-            return new SpoolDrainer(
-                spool: $app->make(Spool::class),
-                transport: $app->make(Transport::class),
-                lock: $app->make(Lock::class),
-                clock: $app->make(Clock::class),
-                failfast: (int) $app['config']->get('uptimex.drain_failfast', 3),
-            );
-        });
+        if ($config->get('logging.channels.uptimex') !== null) {
+            return;
+        }
 
-        $this->app->singleton(DrainTrigger::class, function (Application $app): DrainTrigger {
-            return new DrainTrigger(
-                drainer: $app->make(Drainer::class),
-                config: $app['config'],
-            );
-        });
+        $config->set('logging.channels.uptimex', [
+            'driver' => 'custom',
+            'via' => UptimexLogChannel::class,
+            'level' => env('UPTIMEX_LOG_LEVEL', 'debug'),
+        ]);
     }
 
     /**
@@ -208,10 +190,10 @@ class UptimexServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             $this->commands([
+                AgentCommand::class,
                 TestCommand::class,
                 StatusCommand::class,
                 DeployCommand::class,
-                SpoolDrainCommand::class,
             ]);
         }
 
@@ -400,22 +382,6 @@ class UptimexServiceProvider extends ServiceProvider
                 }
             } catch (Throwable) {
                 // Swallow.
-            }
-        });
-
-        // After the response is sent and the request trace is flushed to the
-        // spool, opportunistically drain the spool — one request at a time,
-        // budget-capped. This is how the SDK self-drains with no extra
-        // process for the host application to run.
-        $this->app->terminating(function (): void {
-            try {
-                if ($this->app['config']->get('uptimex.delivery', 'spool') !== 'spool') {
-                    return;
-                }
-
-                $this->app->make(DrainTrigger::class)->runAfterResponse();
-            } catch (Throwable) {
-                // Swallow — draining must never break the host.
             }
         });
     }

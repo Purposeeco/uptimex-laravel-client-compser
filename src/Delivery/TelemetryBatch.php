@@ -1,15 +1,15 @@
 <?php
 
-namespace Uptimex\Client\Spool;
+namespace Uptimex\Client\Delivery;
 
 /**
- * An immutable, finished telemetry batch — the unit of "zero data loss".
+ * An immutable, finished telemetry batch — the unit handed from the SDK to
+ * the agent, and on to the UptimeX ingest endpoint.
  *
- * Replaces the bare batch array `endTrace()` used to hand straight to the
- * transport. It owns its own (de)serialization so the spool, the
- * dispatchers and the drainer all share one typed contract.
+ * It owns its own (de)serialization so the dispatchers, the socket frame
+ * and the agent's queue all share one typed contract.
  */
-final class SpooledBatch
+final class TelemetryBatch
 {
     /**
      * @param  array<string, mixed>|null  $context
@@ -25,8 +25,7 @@ final class SpooledBatch
     ) {}
 
     /**
-     * The array shape POSTed to the ingest endpoint — identical to the
-     * batch array the SDK has always sent.
+     * The array shape POSTed to the ingest endpoint.
      *
      * @return array<string, mixed>
      */
@@ -43,7 +42,7 @@ final class SpooledBatch
     }
 
     /**
-     * Rehydrate from a decoded spool-file payload.
+     * Rehydrate from a decoded payload.
      *
      * @param  array<string, mixed>  $data
      */

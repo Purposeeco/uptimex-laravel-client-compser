@@ -4,8 +4,8 @@ use Illuminate\Support\Facades\Artisan;
 use Uptimex\Client\Tests\Doubles\FakeTransport;
 use Uptimex\Client\Transport\Transport;
 
-it('sends a real batch through the transport even when delivery is spool', function () {
-    config()->set('uptimex.delivery', 'spool');
+it('sends a real batch through the transport regardless of delivery mode', function () {
+    config()->set('uptimex.delivery', 'agent');
 
     $exit = Artisan::call('uptimex:test');
 

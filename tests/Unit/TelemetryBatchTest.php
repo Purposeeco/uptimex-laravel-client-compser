@@ -1,9 +1,9 @@
 <?php
 
-use Uptimex\Client\Spool\SpooledBatch;
+use Uptimex\Client\Delivery\TelemetryBatch;
 
 it('round-trips through toArray and fromArray', function () {
-    $batch = new SpooledBatch(
+    $batch = new TelemetryBatch(
         batchUuid: 'b-1',
         sdkVersion: '0.1.0',
         host: 'web-01',
@@ -12,7 +12,7 @@ it('round-trips through toArray and fromArray', function () {
         events: [['type' => 'request', 'trace_id' => 't-1']],
     );
 
-    $restored = SpooledBatch::fromArray($batch->toArray());
+    $restored = TelemetryBatch::fromArray($batch->toArray());
 
     expect($restored->batchUuid)->toBe('b-1')
         ->and($restored->sdkVersion)->toBe('0.1.0')
@@ -23,7 +23,7 @@ it('round-trips through toArray and fromArray', function () {
 });
 
 it('produces the batch array shape the ingest endpoint expects', function () {
-    $batch = new SpooledBatch('b-1', '0.1.0', null, null, null, []);
+    $batch = new TelemetryBatch('b-1', '0.1.0', null, null, null, []);
 
     expect($batch->toArray())->toBe([
         'batch_uuid' => 'b-1',
@@ -36,13 +36,13 @@ it('produces the batch array shape the ingest endpoint expects', function () {
 });
 
 it('reports emptiness and event count', function () {
-    expect((new SpooledBatch('b', 'v', null, null, null, []))->isEmpty())->toBeTrue()
-        ->and((new SpooledBatch('b', 'v', null, null, null, [['type' => 'x']]))->isEmpty())->toBeFalse()
-        ->and((new SpooledBatch('b', 'v', null, null, null, [['a' => 1], ['b' => 2]]))->eventCount())->toBe(2);
+    expect((new TelemetryBatch('b', 'v', null, null, null, []))->isEmpty())->toBeTrue()
+        ->and((new TelemetryBatch('b', 'v', null, null, null, [['type' => 'x']]))->isEmpty())->toBeFalse()
+        ->and((new TelemetryBatch('b', 'v', null, null, null, [['a' => 1], ['b' => 2]]))->eventCount())->toBe(2);
 });
 
 it('tolerates a partial payload in fromArray', function () {
-    $restored = SpooledBatch::fromArray(['events' => [['type' => 'log']]]);
+    $restored = TelemetryBatch::fromArray(['events' => [['type' => 'log']]]);
 
     expect($restored->batchUuid)->toBe('')
         ->and($restored->host)->toBeNull()

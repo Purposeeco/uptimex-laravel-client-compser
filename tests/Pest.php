@@ -50,13 +50,13 @@ function uptimexIntegrationBoot(): array
 }
 
 /**
- * Build a SpooledBatch for spool / drain / dispatcher tests.
+ * Build a TelemetryBatch for dispatcher / agent tests.
  *
  * @param  list<array<string, mixed>>  $events
  */
-function spooledBatch(?string $uuid = null, array $events = [['type' => 'request']]): \Uptimex\Client\Spool\SpooledBatch
+function telemetryBatch(?string $uuid = null, array $events = [['type' => 'request']]): \Uptimex\Client\Delivery\TelemetryBatch
 {
-    return new \Uptimex\Client\Spool\SpooledBatch(
+    return new \Uptimex\Client\Delivery\TelemetryBatch(
         batchUuid: $uuid ?? bin2hex(random_bytes(16)),
         sdkVersion: '0.1.0',
         host: 'test-host',
@@ -67,11 +67,11 @@ function spooledBatch(?string $uuid = null, array $events = [['type' => 'request
 }
 
 /**
- * A unique, not-yet-created temp directory path for a filesystem test.
+ * A unique, not-yet-created temp directory / socket path for a test.
  */
-function freshSpoolDir(): string
+function freshTempDir(): string
 {
-    return sys_get_temp_dir().DIRECTORY_SEPARATOR.'uptimex-spool-'.uniqid('', true);
+    return sys_get_temp_dir().DIRECTORY_SEPARATOR.'uptimex-test-'.uniqid('', true);
 }
 
 /**

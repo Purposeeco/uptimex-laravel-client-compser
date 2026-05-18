@@ -21,23 +21,36 @@ it('exposes no UPTIMEX_INGEST_URL env override in the config file', function () 
     expect($source)->not->toContain('UPTIMEX_INGEST_URL');
 });
 
-it('defaults the delivery mode to spool in the published config', function () {
+it('defaults the delivery mode to agent in the published config', function () {
     $source = file_get_contents(__DIR__.'/../../config/uptimex.php');
 
-    expect($source)->toContain("env('UPTIMEX_DELIVERY', 'spool')");
+    expect($source)->toContain("env('UPTIMEX_DELIVERY', 'agent')");
 });
 
-it('defines the spool and drain keys with their documented defaults', function () {
+it('defines the agent delivery keys with their documented defaults', function () {
     $config = require __DIR__.'/../../config/uptimex.php';
 
     expect($config)->toHaveKeys([
-        'delivery', 'spool_path', 'spool_max_files', 'spool_max_bytes',
-        'drain_auto', 'drain_max_batches', 'drain_max_ms', 'drain_failfast',
+        'delivery', 'agent_address', 'agent_connect_timeout_ms',
+        'agent_max_queue', 'agent_ship_batch_size',
         'retry_base_seconds', 'retry_max_seconds',
     ])
-        ->and($config['drain_auto'])->toBeTrue()
-        ->and($config['spool_max_files'])->toBe(10000)
-        ->and($config['spool_max_bytes'])->toBe(524288000)
-        ->and($config['drain_max_batches'])->toBe(20)
-        ->and($config['retry_max_seconds'])->toBe(3600);
+        ->and($config['agent_address'])->toBe('127.0.0.1:9237')
+        ->and($config['agent_connect_timeout_ms'])->toBe(50)
+        ->and($config['agent_max_queue'])->toBe(10000)
+        ->and($config['agent_ship_batch_size'])->toBe(20)
+        ->and($config['retry_base_seconds'])->toBe(5)
+        ->and($config['retry_max_seconds'])->toBe(300);
+});
+
+it('drops the retired spool and drain config keys', function () {
+    $config = require __DIR__.'/../../config/uptimex.php';
+
+    expect($config)->not->toHaveKey('spool_path')
+        ->and($config)->not->toHaveKey('spool_max_files')
+        ->and($config)->not->toHaveKey('spool_max_bytes')
+        ->and($config)->not->toHaveKey('drain_auto')
+        ->and($config)->not->toHaveKey('drain_max_batches')
+        ->and($config)->not->toHaveKey('drain_max_ms')
+        ->and($config)->not->toHaveKey('drain_failfast');
 });

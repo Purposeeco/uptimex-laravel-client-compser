@@ -82,53 +82,40 @@ return [
     |
     | How a finished telemetry batch leaves your application:
     |
-    |   spool  (default) — the batch is written to a local file the instant
-    |                      the request ends (no network on the request path),
-    |                      then shipped to UptimeX out of band. A batch is
-    |                      removed only after the server confirms receipt, so
-    |                      telemetry survives ingest downtime, deploys and
-    |                      restarts. It drains itself on your app's own
-    |                      traffic — no worker or daemon for you to run.
-    |   direct          — send inline over HTTP at the end of the request
-    |                      (the pre-spool behaviour). Auto-selected on
-    |                      serverless runtimes (Vapor / Lambda).
+    |   agent  (default) — at the end of the request the batch is handed to a
+    |                      local `uptimex:agent` daemon over a loopback socket
+    |                      (a microsecond-scale write — no network, no files on
+    |                      the request path). The agent buffers in memory and
+    |                      ships to UptimeX out of band, retrying through
+    |                      outages. If no agent is running the SDK falls back
+    |                      to a direct send, so this is always safe to leave on.
+    |   direct          — send inline over HTTPS at the end of the request.
+    |                      Auto-selected on serverless runtimes (Vapor / Lambda)
+    |                      where a long-lived agent process cannot run.
     |   null            — drop batches without touching the master switch.
     */
-    'delivery' => env('UPTIMEX_DELIVERY', 'spool'),
+    'delivery' => env('UPTIMEX_DELIVERY', 'agent'),
 
     /*
     |--------------------------------------------------------------------------
-    | Spool
+    | Agent delivery
     |--------------------------------------------------------------------------
     |
-    | `spool_path` defaults to storage/uptimex/spool. The directory is
-    | self-bounding: once `spool_max_files` or `spool_max_bytes` is reached the
-    | oldest pending batches are dropped and the loss is logged loudly. The
-    | defaults are large on purpose — a disk-safety backstop, not a routine
-    | pressure valve.
-    */
-    'spool_path' => env('UPTIMEX_SPOOL_PATH'),
-    'spool_max_files' => (int) env('UPTIMEX_SPOOL_MAX_FILES', 10000),
-    'spool_max_bytes' => (int) env('UPTIMEX_SPOOL_MAX_BYTES', 524288000),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Drain
-    |--------------------------------------------------------------------------
+    | Tuning for the `agent` delivery mode. `agent_address` is the loopback
+    | address the `uptimex:agent` daemon listens on and the SDK writes to —
+    | `host:port` or `unix:///path/to.sock`. `agent_connect_timeout_ms` bounds
+    | the SDK's connect attempt so a missing agent never stalls a request.
     |
-    | The spool is drained opportunistically after a response is sent — one
-    | request at a time, capped by `drain_max_batches` / `drain_max_ms` so a
-    | request never over-spends. Set `drain_auto` to false to turn the
-    | piggyback drain off (leaving `uptimex:spool:drain` as the only drainer).
-    | A failed send backs off exponentially between `retry_base_seconds` and
-    | `retry_max_seconds`.
+    | The agent buffers up to `agent_max_queue` batches in memory and ships
+    | them `agent_ship_batch_size` at a time; on a failed send it backs off
+    | exponentially between `retry_base_seconds` and `retry_max_seconds`.
     */
-    'drain_auto' => (bool) env('UPTIMEX_DRAIN_AUTO', true),
-    'drain_max_batches' => (int) env('UPTIMEX_DRAIN_MAX_BATCHES', 20),
-    'drain_max_ms' => (int) env('UPTIMEX_DRAIN_MAX_MS', 750),
-    'drain_failfast' => (int) env('UPTIMEX_DRAIN_FAILFAST', 3),
-    'retry_base_seconds' => (int) env('UPTIMEX_RETRY_BASE', 10),
-    'retry_max_seconds' => (int) env('UPTIMEX_RETRY_MAX', 3600),
+    'agent_address' => env('UPTIMEX_AGENT_ADDRESS', '127.0.0.1:9237'),
+    'agent_connect_timeout_ms' => (int) env('UPTIMEX_AGENT_CONNECT_TIMEOUT_MS', 50),
+    'agent_max_queue' => (int) env('UPTIMEX_AGENT_MAX_QUEUE', 10000),
+    'agent_ship_batch_size' => (int) env('UPTIMEX_AGENT_SHIP_BATCH', 20),
+    'retry_base_seconds' => (int) env('UPTIMEX_RETRY_BASE', 5),
+    'retry_max_seconds' => (int) env('UPTIMEX_RETRY_MAX', 300),
 
     /*
     |--------------------------------------------------------------------------

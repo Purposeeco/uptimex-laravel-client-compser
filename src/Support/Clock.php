@@ -5,8 +5,8 @@ namespace Uptimex\Client\Support;
 use DateTimeImmutable;
 
 /**
- * Injectable wall clock. Exists so the drainer's budget timing and the
- * spool's eligibility maths are deterministic under test instead of
+ * Injectable wall clock. Exists so the agent's retry backoff and
+ * shutdown-drain budget are deterministic under test instead of
  * reaching for global `Carbon::setTestNow()` state.
  */
 interface Clock

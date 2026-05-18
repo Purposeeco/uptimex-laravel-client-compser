@@ -3,22 +3,24 @@
 namespace Uptimex\Client\Console;
 
 use Illuminate\Console\Command;
-use Uptimex\Client\Spool\Spool;
+use Uptimex\Client\Agent\AgentClient;
 use Uptimex\Client\Uptimex;
 
 class StatusCommand extends Command
 {
     protected $signature = 'uptimex:status';
 
-    protected $description = 'Print the SDK config + show whether ingest is reachable.';
+    protected $description = 'Print the SDK config + show whether the agent is reachable.';
 
-    public function handle(Uptimex $uptimex): int
+    public function handle(Uptimex $uptimex, AgentClient $agent): int
     {
+        $delivery = (string) config('uptimex.delivery', 'agent');
+
         $rows = [
             ['enabled', config('uptimex.enabled') ? 'yes' : 'no'],
             ['token configured', config('uptimex.token') ? 'yes' : 'no'],
             ['ingest_url', (string) config('uptimex.ingest_url')],
-            ['delivery', (string) config('uptimex.delivery', 'spool')],
+            ['delivery', $delivery],
             ['deploy', (string) (config('uptimex.deploy') ?: '(unset)')],
             ['server', (string) (config('uptimex.server') ?: gethostname())],
             ['event_buffer', (string) config('uptimex.event_buffer')],
@@ -27,9 +29,9 @@ class StatusCommand extends Command
             ['effective state', $uptimex->isEnabled() ? 'recording' : 'no-op'],
         ];
 
-        if (config('uptimex.delivery', 'spool') === 'spool') {
-            $rows[] = ['spool path', (string) (config('uptimex.spool_path') ?: storage_path('uptimex/spool'))];
-            $rows[] = ['spool pending', (string) app(Spool::class)->size()];
+        if ($delivery === 'agent') {
+            $rows[] = ['agent address', (string) config('uptimex.agent_address', '127.0.0.1:9237')];
+            $rows[] = ['agent reachable', $agent->ping() ? 'yes' : 'no — falling back to direct send'];
         }
 
         $this->table(['Setting', 'Value'], $rows);

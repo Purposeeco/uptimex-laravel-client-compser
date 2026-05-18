@@ -6,7 +6,7 @@ use DateTimeImmutable;
 use Uptimex\Client\Support\Clock;
 
 /**
- * A controllable {@see Clock} for deterministic spool / drain tests.
+ * A controllable {@see Clock} for deterministic agent shipper / backoff tests.
  */
 final class FakeClock implements Clock
 {

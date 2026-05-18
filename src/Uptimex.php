@@ -10,7 +10,7 @@ use Throwable;
 use Uptimex\Client\Buffer\EventBuffer;
 use Uptimex\Client\Context\ExecutionContext;
 use Uptimex\Client\Delivery\BatchDispatcher;
-use Uptimex\Client\Spool\SpooledBatch;
+use Uptimex\Client\Delivery\TelemetryBatch;
 
 /**
  * The SDK's public service. Holds the active execution context (one per
@@ -143,7 +143,7 @@ class Uptimex
             return true;
         }
 
-        $batch = new SpooledBatch(
+        $batch = new TelemetryBatch(
             batchUuid: (string) Str::uuid(),
             sdkVersion: (string) $this->config->get('uptimex.sdk_version', '0.1.0'),
             host: $this->config->get('uptimex.server') ?: (gethostname() ?: null),
@@ -153,7 +153,7 @@ class Uptimex
         );
 
         // Hand the finished batch to the configured delivery strategy
-        // (spool to disk by default). The dispatcher never throws.
+        // (the local agent by default). The dispatcher never throws.
         $accepted = $this->dispatcher->dispatch($batch);
 
         $this->resetContext();

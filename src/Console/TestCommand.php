@@ -16,7 +16,7 @@ class TestCommand extends Command
      * Always performs a real, synchronous round-trip to the server —
      * regardless of the configured `delivery` mode — so the command
      * genuinely verifies the wire (token, URL, connectivity) rather than
-     * just confirming that a file was spooled.
+     * just confirming a batch was handed to the local agent.
      */
     public function handle(Transport $transport): int
     {
