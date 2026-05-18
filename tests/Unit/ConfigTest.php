@@ -21,10 +21,10 @@ it('exposes no UPTIMEX_INGEST_URL env override in the config file', function () 
     expect($source)->not->toContain('UPTIMEX_INGEST_URL');
 });
 
-it('defaults the delivery mode to agent in the published config', function () {
+it('defaults the delivery mode to direct in the published config', function () {
     $source = file_get_contents(__DIR__.'/../../config/uptimex.php');
 
-    expect($source)->toContain("env('UPTIMEX_DELIVERY', 'agent')");
+    expect($source)->toContain("env('UPTIMEX_DELIVERY', 'direct')");
 });
 
 it('defines the agent delivery keys with their documented defaults', function () {

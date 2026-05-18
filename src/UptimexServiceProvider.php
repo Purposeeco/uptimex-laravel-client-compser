@@ -36,6 +36,7 @@ use Throwable;
 use Uptimex\Client\Agent\AgentClient;
 use Uptimex\Client\Console\AgentCommand;
 use Uptimex\Client\Console\DeployCommand;
+use Uptimex\Client\Console\InstallCommand;
 use Uptimex\Client\Console\StatusCommand;
 use Uptimex\Client\Console\TestCommand;
 use Uptimex\Client\Context\ExecutionContext;
@@ -102,7 +103,7 @@ class UptimexServiceProvider extends ServiceProvider
                 return new NullDispatcher;
             }
 
-            $delivery = (string) $config->get('uptimex.delivery', 'agent');
+            $delivery = (string) $config->get('uptimex.delivery', 'direct');
 
             // Serverless runtimes (Vapor / Lambda) cannot host a persistent
             // agent, so deliver inline at the end of the request instead.
@@ -112,11 +113,11 @@ class UptimexServiceProvider extends ServiceProvider
 
             return match ($delivery) {
                 'null' => new NullDispatcher,
-                'direct' => $app->make(DirectDispatcher::class),
-                default => new SocketDispatcher(
+                'agent' => new SocketDispatcher(
                     agent: $app->make(AgentClient::class),
                     fallback: $app->make(DirectDispatcher::class),
                 ),
+                default => $app->make(DirectDispatcher::class),
             };
         });
 
@@ -191,6 +192,7 @@ class UptimexServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 AgentCommand::class,
+                InstallCommand::class,
                 TestCommand::class,
                 StatusCommand::class,
                 DeployCommand::class,

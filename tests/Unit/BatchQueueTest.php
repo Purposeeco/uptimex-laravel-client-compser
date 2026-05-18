@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Log;
 use Uptimex\Client\Agent\BatchQueue;
 
 it('starts empty', function () {
@@ -43,4 +44,16 @@ it('clamps a non-positive cap to at least one', function () {
 
     expect($queue->count())->toBe(1)
         ->and($queue->peek(10)[0]->batchUuid)->toBe('b');
+});
+
+it('logs a queue overflow only once across repeated overflows', function () {
+    Log::spy();
+
+    $queue = new BatchQueue(1);
+    $queue->push(telemetryBatch('1'));
+    $queue->push(telemetryBatch('2')); // overflow
+    $queue->push(telemetryBatch('3')); // overflow — suppressed
+    $queue->push(telemetryBatch('4')); // overflow — suppressed
+
+    Log::shouldHaveReceived('warning')->once();
 });

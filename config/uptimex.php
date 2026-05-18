@@ -82,19 +82,20 @@ return [
     |
     | How a finished telemetry batch leaves your application:
     |
-    |   agent  (default) — at the end of the request the batch is handed to a
-    |                      local `uptimex:agent` daemon over a loopback socket
-    |                      (a microsecond-scale write — no network, no files on
-    |                      the request path). The agent buffers in memory and
-    |                      ships to UptimeX out of band, retrying through
-    |                      outages. If no agent is running the SDK falls back
-    |                      to a direct send, so this is always safe to leave on.
-    |   direct          — send inline over HTTPS at the end of the request.
-    |                      Auto-selected on serverless runtimes (Vapor / Lambda)
-    |                      where a long-lived agent process cannot run.
-    |   null            — drop batches without touching the master switch.
+    |   direct (default) — send inline over HTTPS at the end of the request,
+    |                      after the response has been flushed to the client.
+    |                      Zero setup; works on every host, serverless included.
+    |   agent            — hand the batch to a local `uptimex:agent` daemon
+    |                      over a loopback socket (a microsecond-scale write,
+    |                      no network on the request path); the daemon ships it
+    |                      out of band and retries through outages. The daemon
+    |                      must be run and supervised — `php artisan
+    |                      uptimex:install` generates the config. Falls back to
+    |                      `direct` if no agent is listening, so it is always
+    |                      safe to enable.
+    |   null             — drop batches without touching the master switch.
     */
-    'delivery' => env('UPTIMEX_DELIVERY', 'agent'),
+    'delivery' => env('UPTIMEX_DELIVERY', 'direct'),
 
     /*
     |--------------------------------------------------------------------------

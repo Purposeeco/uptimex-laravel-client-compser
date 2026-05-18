@@ -1,0 +1,16 @@
+[Unit]
+Description=UptimeX telemetry agent
+After=network.target
+
+[Service]
+Type=simple
+User={{user}}
+WorkingDirectory={{cwd}}
+ExecStart={{php}} {{artisan}} uptimex:agent
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

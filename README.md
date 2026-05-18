@@ -18,12 +18,12 @@ and uptime monitoring, self-hosted or cloud.**
 
 Drop this package into a Laravel app and UptimeX automatically captures
 **eleven** kinds of telemetry — without scattering instrumentation calls
-across your codebase. The SDK hooks into Laravel's framework events and
-batches the captured data in memory. When a request ends it hands the
-batch to a local agent over a loopback socket — a microsecond-scale
-write, no network call on the request path — and the agent ships it to
-UptimeX out of band. No agent running? It falls back to a direct send,
-so the package is always drop-in.
+across your codebase. The SDK hooks into Laravel's framework events,
+batches the captured data in memory, and ships it to UptimeX over a
+bounded HTTPS transport once the response has been sent to the client —
+so a slow ingest never slows your application. High-traffic apps can opt
+into the local `uptimex:agent` daemon to move that send off the request
+process entirely.
 
 | Captured | What lands in UptimeX |
 |---|---|
@@ -113,7 +113,7 @@ php artisan vendor:publish --tag=uptimex-config
 | `UPTIMEX_SERVER` | hostname | Optional server label shown in the dashboard |
 | `UPTIMEX_EVENT_BUFFER` | `500` | Max events buffered per execution context |
 | `UPTIMEX_FLUSH_TIMEOUT` | `0.5` | Seconds; HTTP timeout when shipping a batch |
-| `UPTIMEX_DELIVERY` | `agent` | Delivery mode — `agent`, `direct`, or `null` |
+| `UPTIMEX_DELIVERY` | `direct` | Delivery mode — `direct`, `agent`, or `null` |
 | `UPTIMEX_AGENT_ADDRESS` | `127.0.0.1:9237` | Loopback address the local agent listens on |
 | `UPTIMEX_LOG_LEVEL` | `debug` | Minimum PSR-3 level captured by the `uptimex` log channel |
 
@@ -132,26 +132,34 @@ at it:
 'ingest_url' => 'https://ingest.your-uptimex-server.com',
 ```
 
-## Delivery: the agent
+## Delivery
 
-By default the SDK makes **no network call on the request path**. When a
-request ends, the finished batch is handed to a small local daemon —
-`uptimex:agent` — over a loopback socket (a microsecond-scale write).
-The agent buffers batches in memory and ships them to UptimeX out of
-band, retrying through outages with exponential backoff.
+By default (`UPTIMEX_DELIVERY=direct`) the SDK sends each finished batch
+inline over HTTPS at the end of the request — *after* the response has
+been flushed to the client, on a tightly-bounded transport. Nothing to
+install or run; it works on every host, serverless included.
 
-Run the agent as a long-lived process — a Supervisor program or a Forge
-**Daemon** — alongside your app:
+### The agent (opt-in)
+
+High-traffic apps can move the network send off the request process
+entirely. Set `UPTIMEX_DELIVERY=agent` and run the `uptimex:agent`
+daemon: the request then only writes the batch to a local loopback
+socket — a microsecond-scale write — and the daemon ships it out of
+band, buffering in memory and retrying through outages.
+
+The daemon is a long-lived process and must be supervised. Generate the
+Supervisor / systemd config (and the Laravel Forge "Daemon" command)
+with:
 
 ```bash
-php artisan uptimex:agent
+php artisan uptimex:install
 ```
 
 It drains gracefully on `SIGTERM`, so restarting it on deploy loses
-nothing. Running it is **optional**: with no agent listening the SDK
-falls back to sending each batch inline over HTTPS, so the package is
-always drop-in. Serverless runtimes (Vapor / Lambda), where no
-long-lived process can run, are auto-switched to direct delivery.
+nothing. If `agent` is set but no agent is listening, the SDK falls back
+to a direct send — so it is always safe. Serverless runtimes (Vapor /
+Lambda), where no long-lived process can run, stay on direct delivery
+automatically.
 
 Check delivery status — including whether the agent is reachable — any
 time:
@@ -289,20 +297,16 @@ The SDK is designed to add **negligible** overhead to a request:
 
 - Lifecycle listeners record into an in-memory buffer; they never block
   on network I/O.
-- When the request ends, the batch leaves over a local loopback socket
-  to the `uptimex:agent` daemon — a microsecond-scale write. The agent
-  owns all network I/O and retries; your request never waits on it.
-- With no agent running, the SDK falls back to a direct HTTP send on a
-  tightly-bounded transport (default 0.5 s timeout) — still after the
-  response has been sent to the client.
+- In the default `direct` mode the batch is sent over a tightly-bounded
+  HTTPS transport (0.5 s timeout) on `terminate()` — after the response
+  has already been sent to the client, so the user never waits on it.
+- With the `agent` opt-in, the request only writes the batch to a local
+  loopback socket — a microsecond-scale write — and the daemon owns all
+  network I/O and retries; the request process never touches the network.
 - A bug in any listener is wrapped in `try { … } catch (\Throwable) {}`
   so it can never throw into your request handler.
 - Buffer overflow is "drop oldest" — old events are discarded silently
   rather than failing the trace.
-
-With the agent running, the only per-request cost is the in-memory
-buffering plus one local socket write — no network call and no disk I/O
-on the request path.
 
 ## Requirements
 

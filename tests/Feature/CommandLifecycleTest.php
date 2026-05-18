@@ -24,3 +24,9 @@ it('skips its own commands so they can flush inline', function () {
 
     expect(Uptimex::context())->toBeNull();
 });
+
+it('skips schedule:run so an idle scheduler emits no telemetry', function () {
+    event(new CommandStarting('schedule:run', new ArgvInput(['app']), new BufferedOutput));
+
+    expect(Uptimex::context())->toBeNull();
+});

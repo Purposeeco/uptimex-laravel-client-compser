@@ -2,8 +2,8 @@
 
 namespace Uptimex\Client\Agent;
 
-use Illuminate\Support\Facades\Log;
 use Uptimex\Client\Delivery\TelemetryBatch;
+use Uptimex\Client\Support\LogThrottle;
 
 /**
  * A bounded in-memory FIFO of pending telemetry batches inside the agent.
@@ -34,7 +34,7 @@ final class BatchQueue
         if ($overflow > 0) {
             array_splice($this->batches, 0, $overflow);
             $this->droppedTotal += $overflow;
-            Log::warning('uptimex.agent.queue_overflow', [
+            LogThrottle::warn('uptimex.agent.queue_overflow', 'uptimex.agent.queue_overflow', [
                 'dropped' => $overflow,
                 'depth' => count($this->batches),
                 'max' => $this->maxBatches,

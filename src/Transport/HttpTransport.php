@@ -7,6 +7,7 @@ use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
 use Psr\Http\Message\ResponseInterface;
 use Throwable;
+use Uptimex\Client\Support\LogThrottle;
 
 /**
  * Default transport: gzip-encoded JSON POST to `{ingest_url}/api/ingest/events`
@@ -53,7 +54,7 @@ final class HttpTransport implements Transport
             $body = json_encode($batch, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
             $compressed = gzencode($body, level: 6);
         } catch (Throwable $e) {
-            Log::warning('uptimex.transport.encode_failed', ['exception' => $e->getMessage()]);
+            LogThrottle::warn('uptimex.transport.encode_failed', 'uptimex.transport.encode_failed', ['exception' => $e->getMessage()]);
 
             return false;
         }
@@ -82,7 +83,7 @@ final class HttpTransport implements Transport
 
             return false;
         } catch (GuzzleException|Throwable $e) {
-            Log::warning('uptimex.transport.network_failed', ['exception' => $e->getMessage()]);
+            LogThrottle::warn('uptimex.transport.network_failed', 'uptimex.transport.network_failed', ['exception' => $e->getMessage()]);
 
             return false;
         }
@@ -171,7 +172,7 @@ final class HttpTransport implements Transport
     private function logBadStatus(string $prefix, int $status, ResponseInterface $response): void
     {
         if ($status >= 300 && $status < 400) {
-            Log::warning($prefix.'.redirect', [
+            LogThrottle::warn($prefix.'.redirect', $prefix.'.redirect', [
                 'status' => $status,
                 'location' => $response->getHeaderLine('Location'),
                 'hint' => 'The ingest endpoint returned a redirect, which the SDK deliberately '
@@ -184,7 +185,7 @@ final class HttpTransport implements Transport
             return;
         }
 
-        Log::warning($prefix.'.non_2xx', [
+        LogThrottle::warn($prefix.'.non_2xx', $prefix.'.non_2xx', [
             'status' => $status,
             'body_preview' => substr((string) $response->getBody(), 0, 500),
         ]);

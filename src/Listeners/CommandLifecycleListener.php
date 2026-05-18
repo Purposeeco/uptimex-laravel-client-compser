@@ -11,19 +11,25 @@ use Uptimex\Client\Uptimex;
 
 /**
  * Owns the Artisan command lifecycle: starts a trace on `CommandStarting`,
- * records the `command` event + ends the trace on `CommandFinished`. The SDK's
- * own commands (`uptimex:test`, `uptimex:status`) are skipped so they can
- * manage their own flush.
+ * records the `command` event + ends the trace on `CommandFinished`.
+ *
+ * The SDK's own `uptimex:*` commands are skipped — they self-flush, and the
+ * long-running `uptimex:agent` would otherwise open a trace that never ends.
+ * Laravel's `schedule:run` / `schedule:work` are skipped too: they run every
+ * minute and would emit idle telemetry; the real scheduled tasks are captured
+ * separately by ScheduledTaskLifecycleListener.
  */
 final class CommandLifecycleListener
 {
     /**
-     * Skip-list — these commands self-flush and would otherwise drag in their
-     * own telemetry as a side-effect.
+     * Laravel's scheduler dispatcher commands — `schedule:run` fires every
+     * minute via cron; tracing it would emit an idle telemetry batch each
+     * time. The real scheduled tasks are captured by
+     * ScheduledTaskLifecycleListener regardless.
      */
-    private const SKIP_COMMANDS = [
-        'uptimex:test',
-        'uptimex:status',
+    private const SKIP_EXACT = [
+        'schedule:run',
+        'schedule:work',
     ];
 
     /**
@@ -35,7 +41,7 @@ final class CommandLifecycleListener
 
     public function onStarting(CommandStarting $event): void
     {
-        if (! $this->uptimex->isEnabled() || in_array($event->command, self::SKIP_COMMANDS, true)) {
+        if (! $this->uptimex->isEnabled() || $this->shouldSkip($event->command)) {
             return;
         }
 
@@ -55,10 +61,11 @@ final class CommandLifecycleListener
         }
 
         try {
-            $name = $event->command ?? 'unknown';
-            if (in_array($name, self::SKIP_COMMANDS, true)) {
+            if ($this->shouldSkip($event->command)) {
                 return;
             }
+
+            $name = $event->command ?? 'unknown';
 
             if ($this->uptimex->isRecording()) {
                 $start = $this->startedAtByName[$name] ?? null;
@@ -82,6 +89,16 @@ final class CommandLifecycleListener
                 $this->uptimex->endTrace($event->exitCode === 0 ? 'ok' : 'failed');
             }
         }
+    }
+
+    /**
+     * Commands the SDK must not trace — its own `uptimex:*` commands and the
+     * scheduler dispatchers (see the class docblock).
+     */
+    private function shouldSkip(?string $command): bool
+    {
+        return $command !== null
+            && (str_starts_with($command, 'uptimex:') || in_array($command, self::SKIP_EXACT, true));
     }
 
     /**

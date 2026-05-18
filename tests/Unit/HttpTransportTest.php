@@ -7,6 +7,7 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
+use Illuminate\Support\Facades\Log;
 use Uptimex\Client\Transport\HttpTransport;
 
 function buildTransport(MockHandler $mock, array &$container = [], string $ingestUrl = 'https://ingest.test'): HttpTransport
@@ -166,3 +167,36 @@ it('leaves http:// alone for genuinely-local dev hosts', function (string $inges
     'http://127.0.0.1:8000',
     'http://uptimex.test',
 ]);
+
+it('logs a transport network failure only once across repeated failed sends', function () {
+    Log::spy();
+
+    $transport = buildTransport(new MockHandler([
+        new ConnectException('refused', new Request('POST', 'https://ingest.test')),
+        new ConnectException('refused', new Request('POST', 'https://ingest.test')),
+        new ConnectException('refused', new Request('POST', 'https://ingest.test')),
+    ]));
+
+    $transport->send(['events' => []]);
+    $transport->send(['events' => []]);
+    $transport->send(['events' => []]);
+
+    // The flood is throttled — three failed sends, one warning line.
+    Log::shouldHaveReceived('warning')->once();
+});
+
+it('logs a non-2xx response only once across repeated failed sends', function () {
+    Log::spy();
+
+    $transport = buildTransport(new MockHandler([
+        new Response(503, [], 'down'),
+        new Response(503, [], 'down'),
+        new Response(503, [], 'down'),
+    ]));
+
+    $transport->send(['events' => []]);
+    $transport->send(['events' => []]);
+    $transport->send(['events' => []]);
+
+    Log::shouldHaveReceived('warning')->once();
+});

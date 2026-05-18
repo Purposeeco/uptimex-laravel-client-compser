@@ -3,11 +3,15 @@
 use GuzzleHttp\Client;
 use Uptimex\Client\Delivery\BatchDispatcher;
 use Uptimex\Client\Delivery\DirectDispatcher;
+use Uptimex\Client\Support\LogThrottle;
 use Uptimex\Client\Tests\TestCase;
 use Uptimex\Client\Transport\HttpTransport;
 use Uptimex\Client\Transport\Transport;
 
-pest()->extend(TestCase::class)->in('Feature', 'Unit', 'Integration');
+pest()
+    ->extend(TestCase::class)
+    ->beforeEach(fn () => LogThrottle::reset())
+    ->in('Feature', 'Unit', 'Integration');
 
 /**
  * Shared bootstrap for the Integration suite. Reads the env-gated ingest
