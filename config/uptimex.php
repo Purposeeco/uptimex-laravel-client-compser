@@ -68,12 +68,15 @@ return [
     |
     | `event_buffer` is the per-execution-context cap; oldest events are
     | dropped on overflow with a counter incremented for diagnostics.
-    | `flush_timeout` and `connect_timeout` are network timeouts in seconds —
-    | the SDK will rather drop a batch than slow the host application.
+    | `flush_timeout` and `connect_timeout` are network timeouts in seconds.
+    |
+    | These are fixed, managed values — NOT env-driven. They are performance
+    | internals UptimeX tunes; a mis-set timeout or buffer would only slow or
+    | starve the host app, so they are not exposed as a customer foot-gun.
     */
-    'event_buffer' => (int) env('UPTIMEX_EVENT_BUFFER', 500),
-    'flush_timeout' => (float) env('UPTIMEX_FLUSH_TIMEOUT', 0.5),
-    'connect_timeout' => (float) env('UPTIMEX_CONNECT_TIMEOUT', 0.5),
+    'event_buffer' => 500,
+    'flush_timeout' => 0.5,
+    'connect_timeout' => 0.5,
 
     /*
     |--------------------------------------------------------------------------
@@ -102,27 +105,31 @@ return [
     | Agent delivery
     |--------------------------------------------------------------------------
     |
-    | Tuning for the `agent` delivery mode. `agent_address` is the loopback
-    | address the `uptimex:agent` daemon listens on and the SDK writes to —
-    | `host:port` or `unix:///path/to.sock`. `agent_connect_timeout_ms` bounds
-    | the SDK's connect attempt so a missing agent never stalls a request.
+    | Two keys here are env-configurable, because they are genuine deployment
+    | choices:
     |
-    | The agent buffers up to `agent_max_queue` batches in memory and ships
-    | them `agent_ship_batch_size` at a time; on a failed send it backs off
-    | exponentially between `retry_base_seconds` and `retry_max_seconds`.
+    |   agent_address  — the loopback address the `uptimex:agent` daemon
+    |                    listens on and the SDK writes to (`host:port` or
+    |                    `unix:///path/to.sock`). Change it when a port clashes
+    |                    or several apps run an agent on one host.
+    |   agent_fallback — when the agent is unreachable, fall back to a direct
+    |                    send (default true). Set it false for strict
+    |                    agent-only mode: the batch is then dropped, never
+    |                    sent inline from the request.
     |
-    | `agent_fallback` (default true): when the agent is unreachable, the SDK
-    | falls back to a direct send. Set it false for strict agent-only mode —
-    | the batch is then dropped rather than sent inline from the request.
-    |
-    | The retry bounds are deliberately NOT env-driven: they govern how hard
-    | the agent retries against UptimeX's ingest — a platform concern, not a
-    | per-app knob a customer should be able to turn into a retry storm.
+    | Everything else here is a fixed, managed value — NOT env-driven.
+    | `agent_connect_timeout_ms` bounds the SDK's connect attempt so a missing
+    | agent never stalls a request; the agent buffers up to `agent_max_queue`
+    | batches in memory and ships `agent_ship_batch_size` at a time; on a
+    | failed send it backs off exponentially between `retry_base_seconds` and
+    | `retry_max_seconds`. These are performance internals UptimeX tunes — a
+    | mis-set value would only hurt the host app or, for the retry bounds,
+    | storm UptimeX's ingest.
     */
     'agent_address' => env('UPTIMEX_AGENT_ADDRESS', '127.0.0.1:9237'),
-    'agent_connect_timeout_ms' => (int) env('UPTIMEX_AGENT_CONNECT_TIMEOUT_MS', 50),
-    'agent_max_queue' => (int) env('UPTIMEX_AGENT_MAX_QUEUE', 10000),
-    'agent_ship_batch_size' => (int) env('UPTIMEX_AGENT_SHIP_BATCH', 20),
+    'agent_connect_timeout_ms' => 50,
+    'agent_max_queue' => 10000,
+    'agent_ship_batch_size' => 20,
     'agent_fallback' => (bool) env('UPTIMEX_AGENT_FALLBACK', true),
     'retry_base_seconds' => 5,
     'retry_max_seconds' => 300,
@@ -232,9 +239,10 @@ return [
     |
     | Maximum bytes of Laravel `Context` snapshot embedded into the trace's
     | `context_json` column. Anything beyond this is truncated (a metric
-    | counter is incremented for diagnostics).
+    | counter is incremented for diagnostics). A fixed, managed value — NOT
+    | env-driven.
     */
-    'context_max_bytes' => (int) env('UPTIMEX_CONTEXT_MAX_BYTES', 65 * 1024),
+    'context_max_bytes' => 65 * 1024,
 
     /*
     |--------------------------------------------------------------------------

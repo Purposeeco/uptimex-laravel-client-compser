@@ -112,13 +112,8 @@ php artisan vendor:publish --tag=uptimex-config
 | `UPTIMEX_TOKEN` | — | Environment-scoped ingest token from the UptimeX dashboard |
 | `UPTIMEX_DEPLOY` | — | Release identifier (set by `uptimex:deploy`) |
 | `UPTIMEX_SERVER` | hostname | Optional server label shown in the dashboard |
-| `UPTIMEX_EVENT_BUFFER` | `500` | Max events buffered per execution context |
-| `UPTIMEX_FLUSH_TIMEOUT` | `0.5` | Seconds; HTTP timeout when shipping a batch |
 | `UPTIMEX_DELIVERY` | `direct` | Delivery mode — `direct` (default) or `agent` |
 | `UPTIMEX_AGENT_ADDRESS` | `127.0.0.1:9237` | `agent` mode: address the daemon listens on (`host:port` or `unix://…`) |
-| `UPTIMEX_AGENT_CONNECT_TIMEOUT_MS` | `50` | `agent` mode: ms the SDK waits to reach the agent before falling back to direct |
-| `UPTIMEX_AGENT_MAX_QUEUE` | `10000` | `agent` mode: max batches the agent buffers in memory (drop-oldest on overflow) |
-| `UPTIMEX_AGENT_SHIP_BATCH` | `20` | `agent` mode: how many batches the agent ships per cycle |
 | `UPTIMEX_AGENT_FALLBACK` | `true` | `agent` mode: if the agent is unreachable, fall back to a direct send; `false` drops the batch instead |
 | `UPTIMEX_LOG_LEVEL` | `debug` | Minimum PSR-3 level captured by the `uptimex` log channel |
 
