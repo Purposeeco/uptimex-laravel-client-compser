@@ -36,6 +36,7 @@ use Throwable;
 use Uptimex\Client\Agent\AgentClient;
 use Uptimex\Client\Console\AgentCommand;
 use Uptimex\Client\Console\DeployCommand;
+use Uptimex\Client\Console\InstallCommand;
 use Uptimex\Client\Console\StatusCommand;
 use Uptimex\Client\Console\TestCommand;
 use Uptimex\Client\Context\ExecutionContext;
@@ -113,7 +114,9 @@ class UptimexServiceProvider extends ServiceProvider
             return match ($delivery) {
                 'agent' => new SocketDispatcher(
                     agent: $app->make(AgentClient::class),
-                    fallback: $app->make(DirectDispatcher::class),
+                    fallback: $config->get('uptimex.agent_fallback', true)
+                        ? $app->make(DirectDispatcher::class)
+                        : null,
                 ),
                 default => $app->make(DirectDispatcher::class),
             };
@@ -190,6 +193,7 @@ class UptimexServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 AgentCommand::class,
+                InstallCommand::class,
                 TestCommand::class,
                 StatusCommand::class,
                 DeployCommand::class,

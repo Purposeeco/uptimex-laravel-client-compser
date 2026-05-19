@@ -2,6 +2,7 @@
 
 namespace Uptimex\Client\Agent;
 
+use Closure;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 use Uptimex\Client\Delivery\TelemetryBatch;
@@ -25,12 +26,20 @@ final class Agent
 
     private bool $signalsInstalled = false;
 
+    /** Set once the first batch is confirmed shipped — gates the "Connected" line. */
+    private bool $connected = false;
+
+    /**
+     * @param  Closure(string):void|null  $log  Optional activity-line sink — the
+     *                                          console command wires it to stdout.
+     */
     public function __construct(
         private readonly SocketServer $server,
         private readonly BatchQueue $queue,
         private readonly Shipper $shipper,
         private readonly Clock $clock,
         private readonly int $shipBatchSize = 20,
+        private readonly ?Closure $log = null,
     ) {}
 
     /**
@@ -114,18 +123,30 @@ final class Agent
         if (! $this->queue->isEmpty()
             && ! $this->shipper->transportIsNoop()
             && $this->shipper->readyToShip()) {
-            $this->shipper->ship($this->queue, $this->shipBatchSize);
+            $startedAt = $this->clock->monotonic();
+            $report = $this->shipper->ship($this->queue, $this->shipBatchSize);
+            $this->reportShip($report, $this->clock->monotonic() - $startedAt);
         }
     }
 
     private function shutdown(): void
     {
         $this->server->stopListening();
+
+        $pending = $this->queue->count();
+        if ($pending > 0) {
+            $this->emit("Stopping — draining {$pending} batch(es)…");
+        }
+
         $this->shipper->drain($this->queue, $this->clock->monotonic() + self::SHUTDOWN_DRAIN_SECONDS);
         $this->server->close();
 
-        if (! $this->queue->isEmpty()) {
-            $this->warn('uptimex.agent.shutdown_undrained', ['remaining' => $this->queue->count()]);
+        $remaining = $this->queue->count();
+        if ($remaining > 0) {
+            $this->warn('uptimex.agent.shutdown_undrained', ['remaining' => $remaining]);
+            $this->emit("uptimex:agent stopped — {$remaining} batch(es) undrained");
+        } else {
+            $this->emit('uptimex:agent stopped');
         }
     }
 
@@ -166,6 +187,42 @@ final class Agent
         pcntl_signal(SIGTERM, $handler);
         pcntl_signal(SIGINT, $handler);
         $this->signalsInstalled = true;
+    }
+
+    /**
+     * Emit the per-ship activity line — the agent's "Ingest successful" log.
+     */
+    private function reportShip(ShipReport $report, float $elapsed): void
+    {
+        if ($report->sent > 0) {
+            $ms = max(0, (int) round($elapsed * 1000));
+            if (! $this->connected) {
+                $this->connected = true;
+                $this->emit("Connected to UptimeX — first batch accepted [{$ms}ms]");
+            } else {
+                $this->emit("Ingest successful [{$ms}ms] — {$report->sent} batch(es)");
+            }
+        }
+
+        if ($report->failed) {
+            $this->emit("Ingest failed — {$report->queueDepth} batch(es) queued, retrying");
+        }
+    }
+
+    /**
+     * Write an activity line to the optional log sink. Never throws.
+     */
+    private function emit(string $message): void
+    {
+        if ($this->log === null) {
+            return;
+        }
+
+        try {
+            ($this->log)($message);
+        } catch (Throwable) {
+            // Logging must never crash the agent loop.
+        }
     }
 
     /**

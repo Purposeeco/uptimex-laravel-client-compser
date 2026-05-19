@@ -119,6 +119,7 @@ php artisan vendor:publish --tag=uptimex-config
 | `UPTIMEX_AGENT_CONNECT_TIMEOUT_MS` | `50` | `agent` mode: ms the SDK waits to reach the agent before falling back to direct |
 | `UPTIMEX_AGENT_MAX_QUEUE` | `10000` | `agent` mode: max batches the agent buffers in memory (drop-oldest on overflow) |
 | `UPTIMEX_AGENT_SHIP_BATCH` | `20` | `agent` mode: how many batches the agent ships per cycle |
+| `UPTIMEX_AGENT_FALLBACK` | `true` | `agent` mode: if the agent is unreachable, fall back to a direct send; `false` drops the batch instead |
 | `UPTIMEX_LOG_LEVEL` | `debug` | Minimum PSR-3 level captured by the `uptimex` log channel |
 
 ### Self-hosting
@@ -157,12 +158,12 @@ microsecond-scale write — and the daemon ships it out of band, buffering
 in memory and retrying through outages. It drains gracefully on
 `SIGTERM`, so restarting it on deploy loses nothing.
 
-In production, keep the daemon alive with a process monitor — a
-Supervisor program, a `systemd` unit, or a Laravel Forge **Daemon**
-running `php artisan uptimex:agent` — exactly as you would Horizon or a
-queue worker. If `agent` is set but no agent is listening, the SDK falls
-back to a direct send, so it is always safe. Serverless runtimes (Vapor
-/ Lambda) stay on direct delivery automatically.
+In production the daemon must be supervised — see
+[Deploying to production](#deploying-to-production). If `agent` is set
+but no agent is listening, the SDK falls back to a direct send, so it is
+always safe — unless you set `UPTIMEX_AGENT_FALLBACK=false`, which drops
+the batch instead (strict agent-only mode). Serverless runtimes (Vapor /
+Lambda) stay on direct delivery automatically.
 
 Check delivery status — including whether the agent is reachable — any
 time:
@@ -170,6 +171,31 @@ time:
 ```bash
 php artisan uptimex:status
 ```
+
+## Deploying to production
+
+**`direct` (the default) — nothing to deploy.** `composer require` plus
+your `UPTIMEX_TOKEN` is the whole setup: no process to run, no
+supervision. Telemetry ships after each response. This is the right
+choice for most apps.
+
+**`agent` (opt-in) — run the daemon under a process monitor.** Set
+`UPTIMEX_DELIVERY=agent`, then keep `php artisan uptimex:agent` alive as
+a supervised long-lived process — exactly as you would Horizon or a
+queue worker. Running the command by hand is not enough; it must survive
+reboots and crashes.
+
+`php artisan uptimex:install` generates the config for you:
+
+- **Laravel Forge** — Server → Daemons → New Daemon, using the command,
+  directory and user it prints. Forge supervises it.
+- **Plain VPS** — copy the generated Supervisor program (or `systemd`
+  unit) into place and enable it.
+- **Docker** — run `php artisan uptimex:agent` as its own service.
+
+If the agent ever stops, the SDK falls back to a direct send so nothing
+is lost — unless `UPTIMEX_AGENT_FALLBACK=false`, which drops batches
+instead (strict agent-only mode).
 
 ## Capturing logs
 
@@ -206,6 +232,7 @@ SDK detects it and leaves yours untouched.
 | `php artisan uptimex:status` | Print the resolved SDK config; in `agent` mode, also report whether the agent is reachable. |
 | `php artisan uptimex:deploy <ref>` | Post a deployment marker — see [Deployment markers](#deployment-markers). |
 | `php artisan uptimex:agent` | Run the telemetry agent daemon. Needed only for the opt-in `agent` delivery mode. |
+| `php artisan uptimex:install` | Generate Supervisor / systemd config to run `uptimex:agent` as a supervised daemon on a production server. |
 
 ## Public API
 

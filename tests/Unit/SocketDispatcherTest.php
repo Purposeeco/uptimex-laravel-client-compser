@@ -67,3 +67,17 @@ it('never throws and still delivers when the agent address is broken', function 
     expect($dispatcher->dispatch(telemetryBatch()))->toBeTrue()
         ->and($transport->sent)->toHaveCount(1);
 });
+
+it('with no fallback, drops the batch when the agent is down (strict agent-only)', function () {
+    $probe = stream_socket_server('tcp://127.0.0.1:0');
+    $deadAddress = stream_socket_get_name($probe, false);
+    fclose($probe);
+
+    $dispatcher = new SocketDispatcher(
+        new AgentClient($deadAddress, connectTimeoutMs: 250),
+        fallback: null,
+    );
+
+    // UPTIMEX_AGENT_FALLBACK=false → no direct send; the batch is dropped.
+    expect($dispatcher->dispatch(telemetryBatch()))->toBeFalse();
+});

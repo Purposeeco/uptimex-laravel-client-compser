@@ -41,13 +41,14 @@ it('defines the agent delivery keys with their documented defaults', function ()
 
     expect($config)->toHaveKeys([
         'delivery', 'agent_address', 'agent_connect_timeout_ms',
-        'agent_max_queue', 'agent_ship_batch_size',
+        'agent_max_queue', 'agent_ship_batch_size', 'agent_fallback',
         'retry_base_seconds', 'retry_max_seconds',
     ])
         ->and($config['agent_address'])->toBe('127.0.0.1:9237')
         ->and($config['agent_connect_timeout_ms'])->toBe(50)
         ->and($config['agent_max_queue'])->toBe(10000)
         ->and($config['agent_ship_batch_size'])->toBe(20)
+        ->and($config['agent_fallback'])->toBeTrue()
         ->and($config['retry_base_seconds'])->toBe(5)
         ->and($config['retry_max_seconds'])->toBe(300);
 });

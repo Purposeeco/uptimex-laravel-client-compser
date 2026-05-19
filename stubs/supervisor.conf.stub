@@ -1,0 +1,12 @@
+[program:uptimex-agent]
+process_name=%(program_name)s
+command={{php}} {{artisan}} uptimex:agent
+directory={{cwd}}
+user={{user}}
+autostart=true
+autorestart=true
+stopsignal=TERM
+stopwaitsecs=10
+redirect_stderr=true
+stdout_logfile={{cwd}}/storage/logs/uptimex-agent.log
+stdout_logfile_maxbytes=10MB

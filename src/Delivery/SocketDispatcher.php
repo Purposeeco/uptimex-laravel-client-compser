@@ -5,18 +5,18 @@ namespace Uptimex\Client\Delivery;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 use Uptimex\Client\Agent\AgentClient;
+use Uptimex\Client\Support\LogThrottle;
 
 /**
- * Default dispatcher: hands the finished batch to the local `uptimex:agent`
- * over a loopback socket — a microsecond-scale handoff with no network and
- * no files on the request path.
+ * The `agent` delivery dispatcher: hands the finished batch to the local
+ * `uptimex:agent` over a loopback socket — a microsecond-scale handoff with
+ * no network and no files on the request path.
  *
- * If the agent is unreachable (not running, refused, slow, write error) it
- * degrades to a direct HTTPS send via the injected {@see DirectDispatcher},
- * so telemetry is still delivered best-effort rather than dropped. The host
- * request is never affected and this never throws. (Agent-absent is a
- * supported mode — `uptimex:status` reports reachability — so it is not
- * logged; only a genuine encode error is, once per process.)
+ * If the agent is unreachable (not running, refused, slow, write error) and
+ * a fallback {@see DirectDispatcher} is set, it degrades to a direct HTTPS
+ * send so telemetry is still delivered. With no fallback (`UPTIMEX_AGENT_FALLBACK`
+ * = false — strict agent-only mode) the batch is dropped instead. Either way
+ * the host request is never affected and this never throws.
  */
 final class SocketDispatcher implements BatchDispatcher
 {
@@ -24,7 +24,7 @@ final class SocketDispatcher implements BatchDispatcher
 
     public function __construct(
         private readonly AgentClient $agent,
-        private readonly DirectDispatcher $fallback,
+        private readonly ?DirectDispatcher $fallback,
     ) {}
 
     public function dispatch(TelemetryBatch $batch): bool
@@ -43,9 +43,22 @@ final class SocketDispatcher implements BatchDispatcher
             $this->warnOnce($e->getMessage());
         }
 
-        // Agent unreachable, or the batch could not be encoded — degrade to
-        // a direct send rather than dropping the telemetry.
-        return $this->fallback->dispatch($batch);
+        // Agent unreachable, or the batch could not be encoded.
+        if ($this->fallback !== null) {
+            // Degrade to a direct send rather than dropping the telemetry.
+            return $this->fallback->dispatch($batch);
+        }
+
+        // Strict agent-only mode (UPTIMEX_AGENT_FALLBACK=false): the agent is
+        // the only path, so the batch is dropped — never sent inline over HTTP
+        // from the request. Logged once per cooldown so the operator can see it.
+        LogThrottle::warn(
+            'uptimex.agent.dropped_no_fallback',
+            'uptimex.agent.dropped_no_fallback',
+            ['reason' => 'agent unreachable and UPTIMEX_AGENT_FALLBACK is disabled'],
+        );
+
+        return false;
     }
 
     private function warnOnce(string $reason): void

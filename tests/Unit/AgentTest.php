@@ -86,3 +86,32 @@ it('runOnce reads a pending batch, ships it, and stops', function () {
     expect($exit)->toBe(0)
         ->and($transport->sent)->toHaveCount(1);
 });
+
+it('emits a "Connected to UptimeX" activity line on the first successful ship', function () {
+    $server = new SocketServer('127.0.0.1:0');
+    $server->listen();
+    $address = stream_socket_get_name($server->serverStream(), false);
+    $clock = new FakeClock;
+
+    $lines = [];
+    $agent = new Agent(
+        $server,
+        new BatchQueue(100),
+        new Shipper(new FakeTransport, $clock),
+        $clock,
+        log: function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        },
+    );
+
+    writeFrameToAgent($address, json_encode(telemetryBatch('logme')->toArray()));
+
+    for ($i = 0; $i < 8 && $lines === []; $i++) {
+        $agent->tick();
+    }
+
+    expect($lines)->not->toBeEmpty()
+        ->and($lines[0])->toContain('Connected to UptimeX');
+
+    $server->close();
+});

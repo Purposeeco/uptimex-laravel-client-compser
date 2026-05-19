@@ -45,10 +45,13 @@ class AgentCommand extends Command
             ),
             clock: $clock,
             shipBatchSize: (int) config('uptimex.agent_ship_batch_size', 20),
+            log: fn (string $line) => $this->line('  '.date('Y-m-d H:i:s').'  '.$line),
         );
 
         try {
-            $this->info("uptimex:agent listening on {$address}");
+            $version = (string) config('uptimex.sdk_version', '0.1.0');
+            $target = parse_url((string) config('uptimex.ingest_url'), PHP_URL_HOST) ?: 'UptimeX';
+            $this->info("uptimex:agent started — listening on {$address} (v{$version}) — shipping to {$target}");
 
             return $this->option('once') ? $agent->runOnce() : $agent->run();
         } catch (RuntimeException $e) {
