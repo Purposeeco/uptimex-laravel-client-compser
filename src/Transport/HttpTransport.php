@@ -19,14 +19,12 @@ use Uptimex\Client\Support\LogThrottle;
  * exception bubbling into the host's request handler is not.
  *
  * The ingest URL is not customer-configurable — it ships hardcoded in the
- * package config (`ingest_url`), because the host is identical for every cloud
- * tenant and the bearer token is what identifies the workspace. A self-hosted
- * install is the one case that overrides it, in a published config copy.
- * Either way the scheme is forced to HTTPS in the constructor: an `http://`
- * URL is silently upgraded so telemetry never crosses the wire in plaintext.
- * Genuinely-local dev hosts (localhost, 127.0.0.1, *.test, *.localhost) are
- * exempt — they legitimately run without a TLS cert under `artisan serve` or
- * Herd.
+ * package config (`ingest_url`), because the host is identical for every
+ * tenant and the bearer token is what identifies the workspace. The scheme is
+ * forced to HTTPS in the constructor: an `http://` URL is silently upgraded so
+ * telemetry never crosses the wire in plaintext. Genuinely-local dev hosts
+ * (localhost, 127.0.0.1, *.test, *.localhost) are exempt — they legitimately
+ * run without a TLS cert under `artisan serve` or Herd.
  *
  * Redirects are still deliberately NOT followed, as defense-in-depth. If a URL
  * slips past normalization that the server answers with a 3xx, Guzzle would
@@ -127,12 +125,12 @@ final class HttpTransport implements Transport
     /**
      * Force the ingest URL onto HTTPS.
      *
-     * The cloud ingest URL ships hardcoded as HTTPS, so this is a safety net
-     * for a self-hosted install that overrides `ingest_url` in a published
-     * config: an `http://` value ships telemetry in plaintext and trips the
-     * server's HTTPS redirect, so it is upgraded here. Genuinely-local dev
-     * hosts (localhost, 127.0.0.1, ::1, *.localhost, *.test) are exempt — they
-     * legitimately run without a TLS cert under `artisan serve` or Herd.
+     * The ingest URL ships hardcoded as HTTPS, so this is defense-in-depth:
+     * should `ingest_url` ever hold an `http://` value, it would ship
+     * telemetry in plaintext and trip the server's HTTPS redirect, so it is
+     * upgraded here. Genuinely-local dev hosts (localhost, 127.0.0.1, ::1,
+     * *.localhost, *.test) are exempt — they legitimately run without a TLS
+     * cert under `artisan serve` or Herd.
      */
     private function normalizeIngestUrl(string $url): string
     {
@@ -177,9 +175,9 @@ final class HttpTransport implements Transport
                 'location' => $response->getHeaderLine('Location'),
                 'hint' => 'The ingest endpoint returned a redirect, which the SDK deliberately '
                     .'does not follow — that would silently downgrade the POST to a GET. The '
-                    .'cloud ingest URL never redirects; if you run a self-hosted UptimeX '
-                    .'server, check that `ingest_url` in your published config/uptimex.php is '
-                    .'the bare server origin over https:// with no trailing path.',
+                    .'ingest URL never redirects; if `ingest_url` has been changed in '
+                    .'config/uptimex.php, check it is the bare origin over https:// with no '
+                    .'trailing path.',
             ]);
 
             return;

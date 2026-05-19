@@ -3,7 +3,7 @@
 # UptimeX Laravel Client
 
 **The official Laravel SDK for [UptimeX](https://uptimex.tech) — full-stack
-application performance monitoring, self-hosted or cloud.**
+application performance monitoring.**
 
 [![Tests](https://img.shields.io/github/actions/workflow/status/Purposeeco/uptimex-laravel-client-compser/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/Purposeeco/uptimex-laravel-client-compser/actions)
 [![Latest Version](https://img.shields.io/packagist/v/uptimex/laravel-client.svg?style=flat-square)](https://packagist.org/packages/uptimex/laravel-client)
@@ -64,7 +64,7 @@ timeline.
 
 - PHP **8.2+**
 - Laravel **10, 11, 12, or 13**
-- An UptimeX workspace (cloud or self-hosted) and an environment ingest token
+- An UptimeX workspace and an environment ingest token
 
 ## Installation
 
@@ -128,20 +128,10 @@ Performance internals — network timeouts, buffer sizes, the agent's
 in-memory queue — are deliberately **not** environment variables. UptimeX
 manages those values so a stray setting can never degrade your app.
 
-### Self-hosting
-
-The ingest URL is **not** an env var — it ships hardcoded in the package
-(`https://ingest.uptimex.tech`). Cloud customers never think about it, and
-a stray `http://` can't leak telemetry in plaintext; your token, not the
-URL, routes data to your workspace.
-
-Running your own UptimeX server? Publish the config and point `ingest_url`
-at it:
-
-```php
-// config/uptimex.php
-'ingest_url' => 'https://ingest.your-uptimex-server.com',
-```
+The ingest URL is likewise **not** an env var — it ships hardcoded in the
+package (`https://ingest.uptimex.tech`). The host is the same for every
+workspace; your token, not the URL, routes data to yours. Hardcoding it
+also means a stray `http://` can never leak telemetry in plaintext.
 
 ## Delivery — the agent
 
@@ -394,7 +384,7 @@ composer test:all            # everything
 `Integration` tests skip automatically unless both env vars are set:
 
 ```bash
-UPTIMEX_INTEGRATION_INGEST_URL=https://ingest.your-uptimex-server.com \
+UPTIMEX_INTEGRATION_INGEST_URL=https://ingest.uptimex.tech \
 UPTIMEX_INTEGRATION_TOKEN=utx_your_real_token \
 composer test:integration
 ```

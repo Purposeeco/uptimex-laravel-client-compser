@@ -28,16 +28,12 @@ return [
     | Ingest endpoint
     |--------------------------------------------------------------------------
     |
-    | Where batches are shipped. Deliberately NOT env-driven: the host is
-    | identical for every UptimeX cloud tenant — your bearer token, not this
-    | URL, routes data to your workspace — and a customer-supplied URL is a
-    | foot-gun (an `http://` scheme ships telemetry in plaintext and trips the
-    | server's HTTPS redirect).
-    |
-    | Self-hosted installs are the one case that needs a different host: edit
-    | the value here in the copy published by `vendor:publish --tag=uptimex-config`.
-    | The transport upgrades any `http://` host (except localhost / *.test) to
-    | https:// regardless.
+    | Where batches are shipped. Deliberately NOT env-driven and not meant to
+    | be changed — the host is identical for every UptimeX tenant; your bearer
+    | token, not this URL, routes data to your workspace. A customer-set URL is
+    | a foot-gun: an `http://` scheme ships telemetry in plaintext and trips the
+    | server's HTTPS redirect. As a safety net the transport upgrades any
+    | `http://` host (except localhost / *.test) to https:// regardless.
     */
     'ingest_url' => 'https://ingest.uptimex.tech',
 
