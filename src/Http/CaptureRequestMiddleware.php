@@ -49,7 +49,7 @@ final class CaptureRequestMiddleware
                 // Stash the start time on the request attributes so it survives that.
                 $request->attributes->set('uptimex.request_started_at', microtime(true));
 
-                if ($this->uptimex->isEnabled() && $this->uptimex->context() === null) {
+                if ($this->uptimex->shouldStartTrace() && $this->uptimex->context() === null) {
                     $this->uptimex->startTrace(ExecutionContext::TYPE_REQUEST, [
                         'method' => $request->method(),
                         'path' => $request->path(),

@@ -17,7 +17,8 @@ use Uptimex\Client\Transport\Transport;
  * SDK over a local socket, buffers them in memory, and ships them to UptimeX,
  * retrying through outages and draining gracefully on a stop signal.
  *
- * Running it is optional: with no agent, the SDK falls back to a direct send.
+ * It is the SDK's only delivery path: with no agent running the SDK captures
+ * nothing — it behaves exactly as if disabled — and resumes once it is back.
  */
 class AgentCommand extends Command
 {

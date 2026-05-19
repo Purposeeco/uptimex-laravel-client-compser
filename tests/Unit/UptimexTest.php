@@ -2,6 +2,7 @@
 
 use Uptimex\Client\Context\ExecutionContext;
 use Uptimex\Client\Facades\Uptimex;
+use Uptimex\Client\Support\AgentGate;
 
 it('is enabled when token is configured', function () {
     expect(Uptimex::isEnabled())->toBeTrue();
@@ -11,6 +12,26 @@ it('is a no-op when token is not configured', function () {
     config()->set('uptimex.token', '');
 
     expect(Uptimex::isEnabled())->toBeFalse();
+});
+
+it('shouldStartTrace is true when the SDK is enabled and the agent is up', function () {
+    AgentGate::seed(true);
+
+    expect(Uptimex::shouldStartTrace())->toBeTrue();
+});
+
+it('shouldStartTrace is false when the agent is down — the SDK goes idle', function () {
+    AgentGate::seed(false);
+
+    expect(Uptimex::shouldStartTrace())->toBeFalse()
+        ->and(Uptimex::isEnabled())->toBeTrue(); // still configured — just gated
+});
+
+it('shouldStartTrace is false when the SDK is disabled, regardless of the agent', function () {
+    config()->set('uptimex.token', '');
+    AgentGate::seed(true);
+
+    expect(Uptimex::shouldStartTrace())->toBeFalse();
 });
 
 it('starts a trace and assigns a UUIDv7 id', function () {

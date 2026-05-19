@@ -13,10 +13,10 @@ class TestCommand extends Command
     protected $description = 'Send a synthetic event batch to UptimeX and print the result.';
 
     /**
-     * Always performs a real, synchronous round-trip to the server —
-     * regardless of the configured `delivery` mode — so the command
-     * genuinely verifies the wire (token, URL, connectivity) rather than
-     * just confirming a batch was handed to the local agent.
+     * Always performs a real, synchronous round-trip to the server — it does
+     * not go through the agent — so the command genuinely verifies the wire
+     * (token, URL, connectivity) rather than just confirming a batch was
+     * handed to the local agent.
      */
     public function handle(Transport $transport): int
     {

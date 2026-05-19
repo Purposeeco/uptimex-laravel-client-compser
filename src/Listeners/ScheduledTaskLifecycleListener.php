@@ -27,7 +27,7 @@ final class ScheduledTaskLifecycleListener
 
     public function onStarting(ScheduledTaskStarting $event): void
     {
-        if (! $this->uptimex->isEnabled()) {
+        if (! $this->uptimex->shouldStartTrace()) {
             return;
         }
 

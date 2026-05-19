@@ -3,8 +3,9 @@
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Uptimex\Client\Agent\AgentClient;
 use Uptimex\Client\Context\ExecutionContext;
-use Uptimex\Client\Delivery\DirectDispatcher;
+use Uptimex\Client\Tests\Doubles\FakeDispatcher;
 use Uptimex\Client\Transport\HttpTransport;
 use Uptimex\Client\Uptimex;
 
@@ -44,7 +45,8 @@ it('accepts a synthetic batch via HttpTransport over the wire', function () {
 it('runs the full SDK lifecycle (startTrace + record + endTrace) against a real backend', function () {
     $uptimex = new Uptimex(
         config: app('config'),
-        dispatcher: new DirectDispatcher($this->httpTransport),
+        dispatcher: new FakeDispatcher($this->httpTransport),
+        agent: app(AgentClient::class),
     );
 
     $context = $uptimex->startTrace(ExecutionContext::TYPE_REQUEST, [

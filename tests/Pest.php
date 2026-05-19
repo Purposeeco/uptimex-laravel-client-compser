@@ -2,15 +2,23 @@
 
 use GuzzleHttp\Client;
 use Uptimex\Client\Delivery\BatchDispatcher;
-use Uptimex\Client\Delivery\DirectDispatcher;
+use Uptimex\Client\Support\AgentGate;
 use Uptimex\Client\Support\LogThrottle;
+use Uptimex\Client\Tests\Doubles\FakeDispatcher;
 use Uptimex\Client\Tests\TestCase;
 use Uptimex\Client\Transport\HttpTransport;
 use Uptimex\Client\Transport\Transport;
 
 pest()
     ->extend(TestCase::class)
-    ->beforeEach(fn () => LogThrottle::reset())
+    ->beforeEach(function () {
+        LogThrottle::reset();
+        // The agent circuit breaker keeps process-static state. Reset it
+        // between tests and seed it "up" so trace-driving tests are not
+        // gated out; tests that exercise the breaker itself re-seed/reset.
+        AgentGate::reset();
+        AgentGate::seed(true);
+    })
     ->in('Feature', 'Unit', 'Integration');
 
 /**
@@ -48,7 +56,7 @@ function uptimexIntegrationBoot(): array
     );
 
     app()->instance(Transport::class, $transport);
-    app()->instance(BatchDispatcher::class, new DirectDispatcher($transport));
+    app()->instance(BatchDispatcher::class, new FakeDispatcher($transport));
 
     return [$url, $token, $transport];
 }

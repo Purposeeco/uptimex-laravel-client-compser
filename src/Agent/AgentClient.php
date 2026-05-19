@@ -11,7 +11,7 @@ use Throwable;
  * → close. Both the connect and the write are bounded by a tiny timeout, so
  * a missing or stalled agent costs the request worker microseconds, never a
  * stall. Every failure path returns `false` (the caller — {@see ...\Delivery\
- * SocketDispatcher} — then falls back to a direct send). Never throws.
+ * SocketDispatcher} — then drops the batch silently). Never throws.
  */
 final class AgentClient
 {

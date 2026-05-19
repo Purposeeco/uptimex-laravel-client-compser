@@ -41,7 +41,7 @@ final class CommandLifecycleListener
 
     public function onStarting(CommandStarting $event): void
     {
-        if (! $this->uptimex->isEnabled() || $this->shouldSkip($event->command)) {
+        if (! $this->uptimex->shouldStartTrace() || $this->shouldSkip($event->command)) {
             return;
         }
 

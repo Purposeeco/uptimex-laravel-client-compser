@@ -41,7 +41,6 @@ use Uptimex\Client\Console\StatusCommand;
 use Uptimex\Client\Console\TestCommand;
 use Uptimex\Client\Context\ExecutionContext;
 use Uptimex\Client\Delivery\BatchDispatcher;
-use Uptimex\Client\Delivery\DirectDispatcher;
 use Uptimex\Client\Delivery\NullDispatcher;
 use Uptimex\Client\Delivery\SocketDispatcher;
 use Uptimex\Client\Exceptions\ExceptionCapture;
@@ -89,13 +88,9 @@ class UptimexServiceProvider extends ServiceProvider
         $this->registerAgentServices();
         $this->registerLogChannel();
 
-        // DirectDispatcher is also bound concretely so `uptimex:test` can
-        // demand a real synchronous round-trip regardless of `delivery`.
-        $this->app->bind(DirectDispatcher::class, function (Application $app): DirectDispatcher {
-            return new DirectDispatcher($app->make(Transport::class));
-        });
-
-        // The delivery strategy endTrace() hands finished batches to.
+        // The delivery strategy endTrace() hands finished batches to. The
+        // agent daemon is the only delivery path — a real dispatcher when the
+        // SDK is configured, a no-op when it is disabled or has no token.
         $this->app->singleton(BatchDispatcher::class, function (Application $app): BatchDispatcher {
             $config = $app['config'];
 
@@ -103,29 +98,14 @@ class UptimexServiceProvider extends ServiceProvider
                 return new NullDispatcher;
             }
 
-            $delivery = (string) $config->get('uptimex.delivery', 'direct');
-
-            // Serverless runtimes (Vapor / Lambda) cannot host a persistent
-            // agent, so deliver inline at the end of the request instead.
-            if ($delivery === 'agent' && $this->isServerless()) {
-                $delivery = 'direct';
-            }
-
-            return match ($delivery) {
-                'agent' => new SocketDispatcher(
-                    agent: $app->make(AgentClient::class),
-                    fallback: $config->get('uptimex.agent_fallback', true)
-                        ? $app->make(DirectDispatcher::class)
-                        : null,
-                ),
-                default => $app->make(DirectDispatcher::class),
-            };
+            return new SocketDispatcher($app->make(AgentClient::class));
         });
 
         $this->app->singleton(Uptimex::class, function (Application $app): Uptimex {
             return new Uptimex(
                 config: $app['config'],
                 dispatcher: $app->make(BatchDispatcher::class),
+                agent: $app->make(AgentClient::class),
             );
         });
     }
@@ -167,21 +147,6 @@ class UptimexServiceProvider extends ServiceProvider
             'via' => UptimexLogChannel::class,
             'level' => env('UPTIMEX_LOG_LEVEL', 'debug'),
         ]);
-    }
-
-    /**
-     * Detect a serverless runtime (Vapor / AWS Lambda) where the local disk
-     * is ephemeral and the container freezes after the response.
-     */
-    private function isServerless(): bool
-    {
-        foreach (['VAPOR_SSM_PATH', 'VAPOR_ARTIFACT_NAME', 'AWS_LAMBDA_FUNCTION_NAME', 'LAMBDA_TASK_ROOT', 'AWS_EXECUTION_ENV'] as $marker) {
-            if (env($marker) !== null) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     public function boot(): void
@@ -361,7 +326,7 @@ class UptimexServiceProvider extends ServiceProvider
             try {
                 $uptimex = $this->app->make(Uptimex::class);
 
-                if (! $uptimex->isEnabled()) {
+                if (! $uptimex->shouldStartTrace()) {
                     return;
                 }
 

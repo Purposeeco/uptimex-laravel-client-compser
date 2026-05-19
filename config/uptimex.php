@@ -80,57 +80,41 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Delivery
+    | Delivery — the uptimex:agent daemon
     |--------------------------------------------------------------------------
     |
-    | How a finished telemetry batch leaves your application:
+    | Telemetry is delivered one way: the SDK writes each finished batch to a
+    | local `uptimex:agent` daemon over a loopback socket — a microsecond-scale
+    | write, no network on the request path — and the daemon ships it to
+    | UptimeX out of band, buffering and retrying through outages. Run the
+    | daemon with `php artisan uptimex:agent`, kept alive by a process monitor
+    | (a Forge daemon, Supervisor, or systemd) in production.
     |
-    |   direct (default) — send inline over HTTPS at the end of the request,
-    |                      after the response has been flushed to the client.
-    |                      Zero setup; works on every host, serverless included.
-    |   agent            — hand the batch to a local `uptimex:agent` daemon
-    |                      over a loopback socket (a microsecond-scale write,
-    |                      no network on the request path); the daemon ships it
-    |                      out of band and retries through outages. Run it with
-    |                      `php artisan uptimex:agent`, kept alive by a process
-    |                      monitor. Falls back to `direct` if no agent is
-    |                      listening, so it is always safe to enable.
+    | When no agent is running the SDK is completely inert — it captures
+    | nothing and makes no network calls, exactly as if `enabled` were false —
+    | and resumes on its own once the agent is back. To turn telemetry off
+    | deliberately, use the `enabled` master switch above.
     |
-    | To turn telemetry off entirely, use the `enabled` master switch above.
-    */
-    'delivery' => env('UPTIMEX_DELIVERY', 'direct'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Agent delivery
-    |--------------------------------------------------------------------------
-    |
-    | Two keys here are env-configurable, because they are genuine deployment
-    | choices:
-    |
-    |   agent_address  — the loopback address the `uptimex:agent` daemon
-    |                    listens on and the SDK writes to (`host:port` or
-    |                    `unix:///path/to.sock`). Change it when a port clashes
-    |                    or several apps run an agent on one host.
-    |   agent_fallback — when the agent is unreachable, fall back to a direct
-    |                    send (default true). Set it false for strict
-    |                    agent-only mode: the batch is then dropped, never
-    |                    sent inline from the request.
+    | `agent_address` is env-configurable because it is a genuine deployment
+    | choice: the loopback address the daemon listens on and the SDK writes to
+    | (`host:port` or `unix:///path/to.sock`). Change it when a port clashes,
+    | or when several apps run an agent on one host.
     |
     | Everything else here is a fixed, managed value — NOT env-driven.
     | `agent_connect_timeout_ms` bounds the SDK's connect attempt so a missing
-    | agent never stalls a request; the agent buffers up to `agent_max_queue`
-    | batches in memory and ships `agent_ship_batch_size` at a time; on a
-    | failed send it backs off exponentially between `retry_base_seconds` and
-    | `retry_max_seconds`. These are performance internals UptimeX tunes — a
-    | mis-set value would only hurt the host app or, for the retry bounds,
-    | storm UptimeX's ingest.
+    | agent never stalls a request; `agent_health_recheck_seconds` is how often
+    | the SDK re-probes a down agent before resuming capture; the agent buffers
+    | up to `agent_max_queue` batches in memory and ships `agent_ship_batch_size`
+    | at a time; on a failed send it backs off exponentially between
+    | `retry_base_seconds` and `retry_max_seconds`. These are performance
+    | internals UptimeX tunes — a mis-set value would only hurt the host app
+    | or, for the retry bounds, storm UptimeX's ingest.
     */
     'agent_address' => env('UPTIMEX_AGENT_ADDRESS', '127.0.0.1:9237'),
     'agent_connect_timeout_ms' => 50,
+    'agent_health_recheck_seconds' => 30,
     'agent_max_queue' => 10000,
     'agent_ship_batch_size' => 20,
-    'agent_fallback' => (bool) env('UPTIMEX_AGENT_FALLBACK', true),
     'retry_base_seconds' => 5,
     'retry_max_seconds' => 300,
 

@@ -34,6 +34,7 @@ it('keeps internal performance-tuning keys out of env reach', function () {
         ->not->toContain('UPTIMEX_AGENT_CONNECT_TIMEOUT_MS')
         ->not->toContain('UPTIMEX_AGENT_MAX_QUEUE')
         ->not->toContain('UPTIMEX_AGENT_SHIP_BATCH')
+        ->not->toContain('UPTIMEX_AGENT_HEALTH_RECHECK')
         ->not->toContain('UPTIMEX_RETRY_BASE')
         ->not->toContain('UPTIMEX_RETRY_MAX')
         ->not->toContain('UPTIMEX_CONTEXT_MAX_BYTES');
@@ -48,35 +49,40 @@ it('bakes the performance-tuning keys at their managed values', function () {
         ->and($config['agent_connect_timeout_ms'])->toBe(50)
         ->and($config['agent_max_queue'])->toBe(10000)
         ->and($config['agent_ship_batch_size'])->toBe(20)
+        ->and($config['agent_health_recheck_seconds'])->toBe(30)
         ->and($config['context_max_bytes'])->toBe(66560)
         ->and($config['retry_base_seconds'])->toBe(5)
         ->and($config['retry_max_seconds'])->toBe(300);
 });
 
-it('defaults the delivery mode to direct in the published config', function () {
+it('exposes no retired delivery env overrides in the config file', function () {
+    // Agent-only delivery: there is one path, so neither a delivery mode nor
+    // an agent fallback is a customer knob anymore.
     $source = file_get_contents(__DIR__.'/../../config/uptimex.php');
 
-    expect($source)->toContain("env('UPTIMEX_DELIVERY', 'direct')");
+    expect($source)
+        ->not->toContain('UPTIMEX_DELIVERY')
+        ->not->toContain('UPTIMEX_AGENT_FALLBACK');
 });
 
 it('defines the agent delivery keys with their documented defaults', function () {
     $config = require __DIR__.'/../../config/uptimex.php';
 
     expect($config)->toHaveKeys([
-        'delivery', 'agent_address', 'agent_connect_timeout_ms',
-        'agent_max_queue', 'agent_ship_batch_size', 'agent_fallback',
+        'agent_address', 'agent_connect_timeout_ms', 'agent_health_recheck_seconds',
+        'agent_max_queue', 'agent_ship_batch_size',
         'retry_base_seconds', 'retry_max_seconds',
     ])
         ->and($config['agent_address'])->toBe('127.0.0.1:9237')
         ->and($config['agent_connect_timeout_ms'])->toBe(50)
+        ->and($config['agent_health_recheck_seconds'])->toBe(30)
         ->and($config['agent_max_queue'])->toBe(10000)
         ->and($config['agent_ship_batch_size'])->toBe(20)
-        ->and($config['agent_fallback'])->toBeTrue()
         ->and($config['retry_base_seconds'])->toBe(5)
         ->and($config['retry_max_seconds'])->toBe(300);
 });
 
-it('drops the retired spool and drain config keys', function () {
+it('drops the retired spool, drain, and delivery-mode config keys', function () {
     $config = require __DIR__.'/../../config/uptimex.php';
 
     expect($config)->not->toHaveKey('spool_path')
@@ -85,5 +91,7 @@ it('drops the retired spool and drain config keys', function () {
         ->and($config)->not->toHaveKey('drain_auto')
         ->and($config)->not->toHaveKey('drain_max_batches')
         ->and($config)->not->toHaveKey('drain_max_ms')
-        ->and($config)->not->toHaveKey('drain_failfast');
+        ->and($config)->not->toHaveKey('drain_failfast')
+        ->and($config)->not->toHaveKey('delivery')
+        ->and($config)->not->toHaveKey('agent_fallback');
 });

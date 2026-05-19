@@ -19,9 +19,9 @@ application performance monitoring, self-hosted or cloud.**
 Add the package to a Laravel app, set one token, and UptimeX captures
 **eleven kinds of telemetry** automatically — with no instrumentation
 calls scattered through your code. The SDK hooks into Laravel's framework
-events, buffers what it captures in memory, and ships it to UptimeX
-*after the response has reached the user* — so monitoring never slows a
-request.
+events, buffers what it captures in memory, and hands it to the local
+`uptimex:agent` daemon once the response has reached the user — so
+monitoring never slows a request.
 
 | Captured | What lands in UptimeX |
 |---|---|
@@ -45,17 +45,18 @@ timeline.
 
 - **Drop-in.** `composer require`, set your ingest token — done. The
   service provider auto-registers; no code changes in your app.
-- **Safe by construction.** Every listener is exception-wrapped, every
-  network call is bounded by a 0.5 s timeout, buffers drop oldest on
-  overflow, and failure logging is throttled — a bug or an outage in the
-  SDK can never break *or* flood your application.
+- **Safe by construction.** Every listener is exception-wrapped, the
+  request only writes to a local socket (never the network), buffers
+  drop oldest on overflow, and with no agent running the SDK goes
+  silently inert — a bug or an outage can never break *or* flood your
+  application.
 - **Privacy-first.** Request payloads, headers, and log context are
   redacted against sensible defaults you can extend per event type.
 - **Volume control.** Per-event-type sampling and whole-category ignore
   switches keep telemetry — and your bill — proportionate.
-- **Two delivery modes.** `direct` works everywhere with zero setup; the
-  opt-in `agent` daemon moves the network send off the request process
-  for high-traffic apps.
+- **Agent-based delivery.** A local `uptimex:agent` daemon ships your
+  telemetry out of band — the request only writes to a loopback socket,
+  never the network.
 - **Multi-version.** Tested against Laravel 10 / 11 / 12 / 13 on PHP
   8.2 / 8.3 / 8.4.
 
@@ -89,9 +90,18 @@ Batch accepted by UptimeX.
   trace_id: 019df4c8-d721-7067-8c88-10a84081b445
 ```
 
-That is the entire setup. Telemetry now flows automatically as your app
-serves requests, runs jobs, and executes scheduled tasks — visible in the
-UptimeX dashboard within seconds.
+Then run the agent — the daemon that delivers your telemetry — and leave
+it running:
+
+```bash
+php artisan uptimex:agent
+```
+
+That is the whole setup. With the agent running, telemetry flows
+automatically as your app serves requests, runs jobs, and executes
+scheduled tasks — visible in the UptimeX dashboard within seconds. In
+production the agent runs as a supervised daemon; see
+[Deploying to production](#deploying-to-production).
 
 ## Configuration
 
@@ -108,9 +118,7 @@ php artisan vendor:publish --tag=uptimex-config
 | `UPTIMEX_TOKEN` | — | Environment-scoped ingest token from the UptimeX dashboard |
 | `UPTIMEX_DEPLOY` | — | Release identifier, usually set by `uptimex:deploy` |
 | `UPTIMEX_SERVER` | hostname | Server label shown in the dashboard |
-| `UPTIMEX_DELIVERY` | `direct` | Delivery mode — `direct` (default) or `agent` |
-| `UPTIMEX_AGENT_ADDRESS` | `127.0.0.1:9237` | `agent` mode — address the daemon listens on (`host:port` or `unix:///path.sock`) |
-| `UPTIMEX_AGENT_FALLBACK` | `true` | `agent` mode — fall back to a direct send if the agent is unreachable; `false` drops the batch |
+| `UPTIMEX_AGENT_ADDRESS` | `127.0.0.1:9237` | Address the `uptimex:agent` daemon listens on (`host:port` or `unix:///path.sock`) |
 | `UPTIMEX_LOG_LEVEL` | `debug` | Minimum PSR-3 level the `uptimex` log channel captures |
 
 Privacy, sampling, and filtering have their own env vars — see
@@ -135,52 +143,40 @@ at it:
 'ingest_url' => 'https://ingest.your-uptimex-server.com',
 ```
 
-## Delivery modes
+## Delivery — the agent
 
-### `direct` — the default
+Telemetry is delivered by one channel: the **`uptimex:agent`** daemon.
+During a request the SDK records events into an in-memory buffer; when
+the request ends it writes the finished batch to the agent over a local
+loopback socket — a microsecond-scale write, no network on the request
+path. The daemon ships batches to UptimeX out of band, buffering in
+memory and retrying through outages, and drains gracefully on `SIGTERM`
+so a deploy restart loses nothing.
 
-The SDK sends each finished batch inline over HTTPS at the end of the
-request, *after* the response has been flushed to the client, on a
-tightly-bounded transport. Nothing to install, nothing to run — it works
-on every host, serverless included. This is the right choice for most
-applications.
-
-### `agent` — opt-in
-
-High-traffic apps can move the network send off the request process
-entirely. Set `UPTIMEX_DELIVERY=agent` and run the agent daemon:
+Run the agent locally while you develop:
 
 ```bash
 php artisan uptimex:agent
 ```
 
-The request then only writes the batch to a local loopback socket — a
-microsecond-scale write — and the daemon ships it out of band, buffering
-in memory, retrying through outages, and logging each successful ingest.
-It drains gracefully on `SIGTERM`, so restarting it on deploy loses
-nothing.
+In production it runs as a supervised daemon — see
+[Deploying to production](#deploying-to-production).
 
-In production the daemon must be supervised — see
-[Deploying to production](#deploying-to-production). If `agent` is set but
-no agent is listening, the SDK falls back to a direct send, so it is
-always safe — unless you set `UPTIMEX_AGENT_FALLBACK=false`, which drops
-the batch instead (strict agent-only mode). Serverless runtimes (Vapor /
-Lambda) stay on direct delivery automatically.
+**With no agent running, the SDK is inert.** It detects the absence —
+a cached health check, re-probed every ~30 s — starts no trace, buffers
+nothing, and writes no log line: it behaves exactly as if
+`UPTIMEX_ENABLED=false`. The moment the agent is back, capture resumes
+on its own. So a forgotten or crashed agent costs a gap in telemetry,
+never an error or a slowdown.
 
-Check delivery status — including whether the agent is reachable — any
-time with `php artisan uptimex:status`.
+Check the agent's reachability any time with `php artisan uptimex:status`.
 
 ## Deploying to production
 
-**`direct` (the default) — nothing to deploy.** `composer require` plus
-your `UPTIMEX_TOKEN` is the whole setup: no process, no supervision.
-Telemetry ships after each response.
-
-**`agent` (opt-in) — run the daemon under a process monitor.** Set
-`UPTIMEX_DELIVERY=agent`, then keep `php artisan uptimex:agent` alive as a
-supervised long-lived process — exactly as you would Horizon or a queue
-worker. Running the command by hand is not enough; it must survive
-reboots and crashes.
+The `uptimex:agent` daemon must run as a supervised, long-lived process —
+exactly as you would run Horizon or a queue worker. Keep
+`php artisan uptimex:agent` alive; running the command by hand is not
+enough, it must survive reboots and crashes.
 
 `php artisan uptimex:install` generates the supervision config for you:
 
@@ -190,6 +186,9 @@ reboots and crashes.
 - **Plain VPS** — copy the generated Supervisor program (or `systemd`
   unit) into place and enable it.
 - **Docker** — run `php artisan uptimex:agent` as its own service.
+
+Serverless runtimes (Vapor / Lambda) cannot host a persistent daemon, so
+the SDK is inert there — no errors, just no telemetry.
 
 ## Capturing logs
 
@@ -328,9 +327,9 @@ UptimeX then:
 | Command | What it does |
 |---|---|
 | `php artisan uptimex:test` | Send a synthetic batch and print the result — a real round-trip that verifies token and connectivity. |
-| `php artisan uptimex:status` | Print the resolved SDK config; in `agent` mode, also report whether the agent is reachable. |
+| `php artisan uptimex:status` | Print the resolved SDK config and report whether the agent is reachable. |
 | `php artisan uptimex:deploy <ref>` | Post a deployment marker — see [Deployment markers](#deployment-markers). |
-| `php artisan uptimex:agent` | Run the telemetry agent daemon — needed only for the opt-in `agent` delivery mode. |
+| `php artisan uptimex:agent` | Run the telemetry agent daemon — the SDK's delivery process; run it locally and as a supervised daemon in production. |
 | `php artisan uptimex:install` | Generate Supervisor / systemd config to run `uptimex:agent` as a supervised daemon in production. |
 
 ## The `Uptimex` facade
@@ -368,12 +367,10 @@ The SDK is built to add **negligible** overhead to a request:
 
 - Lifecycle listeners record into an in-memory buffer; they never block on
   network I/O.
-- In the default `direct` mode the batch is sent on `terminate()` — after
-  the response has already reached the client — over a transport bounded
-  by a 0.5 s timeout, so the user never waits on it.
-- In `agent` mode the request only writes the batch to a local loopback
-  socket (a microsecond-scale write); the daemon owns all network I/O and
-  retries — the request process never touches the network.
+- The request only writes the finished batch to a local loopback socket
+  (a microsecond-scale write); the `uptimex:agent` daemon owns all
+  network I/O and retries — the request process never touches the
+  network.
 - Every listener is wrapped in `try { … } catch (\Throwable) {}`, so a bug
   in the SDK can never throw into your request handler.
 - Buffer overflow is "drop oldest", and failure logging is throttled —

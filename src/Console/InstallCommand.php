@@ -10,15 +10,16 @@ use Throwable;
  * `uptimex:install` — generate process-supervisor config for the
  * `uptimex:agent` daemon.
  *
- * The opt-in `agent` delivery mode needs the daemon kept alive by a process
- * supervisor. A system service must be installed as root, which an artisan
- * command cannot do — so this command GENERATES the Supervisor program file
- * and the systemd unit (with this host's PHP binary, paths and user already
- * substituted in) and prints the exact next steps, including the Laravel
- * Forge "Daemon" entry. The operator runs those once on the production server.
+ * The agent is the SDK's delivery path, and in production the daemon must be
+ * kept alive by a process supervisor. A system service must be installed as
+ * root, which an artisan command cannot do — so this command GENERATES the
+ * Supervisor program file and the systemd unit (with this host's PHP binary,
+ * paths and user already substituted in) and prints the exact next steps,
+ * including the Laravel Forge "Daemon" entry. The operator runs those once on
+ * the production server.
  *
- * It is a production tool — local development needs none of this; `direct`
- * delivery works with zero setup.
+ * It is a production tool — locally you just run `php artisan uptimex:agent`
+ * yourself; no supervisor config is needed.
  */
 class InstallCommand extends Command
 {
@@ -34,9 +35,9 @@ class InstallCommand extends Command
 
         if ($this->getLaravel()->environment('local')) {
             $this->newLine();
-            $this->warn('Heads up: this looks like a local environment. You do NOT need the agent');
-            $this->warn('in local development — `direct` delivery works with zero setup. This');
-            $this->warn('command is for production servers. Generating the files anyway.');
+            $this->warn('Heads up: this looks like a local environment. You do not need this');
+            $this->warn('supervisor config locally — just run `php artisan uptimex:agent`');
+            $this->warn('yourself. This command is for production servers. Generating anyway.');
         }
 
         $php = PHP_BINARY;
@@ -96,7 +97,7 @@ class InstallCommand extends Command
         $this->line("  sudo cp {$systemdPath} /etc/systemd/system/uptimex-agent.service");
         $this->line('  sudo systemctl daemon-reload && sudo systemctl enable --now uptimex-agent');
         $this->newLine();
-        $this->line('Then set <info>UPTIMEX_DELIVERY=agent</info> in .env and run <info>php artisan uptimex:status</info>.');
+        $this->line('Then run <info>php artisan uptimex:status</info> to confirm the agent is reachable.');
 
         return self::SUCCESS;
     }

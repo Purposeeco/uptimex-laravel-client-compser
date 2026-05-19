@@ -7,10 +7,12 @@ use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Support\Facades\Context as LaravelContext;
 use Illuminate\Support\Str;
 use Throwable;
+use Uptimex\Client\Agent\AgentClient;
 use Uptimex\Client\Buffer\EventBuffer;
 use Uptimex\Client\Context\ExecutionContext;
 use Uptimex\Client\Delivery\BatchDispatcher;
 use Uptimex\Client\Delivery\TelemetryBatch;
+use Uptimex\Client\Support\AgentGate;
 
 /**
  * The SDK's public service. Holds the active execution context (one per
@@ -48,6 +50,7 @@ class Uptimex
     public function __construct(
         private readonly ConfigRepository $config,
         private readonly BatchDispatcher $dispatcher,
+        private readonly AgentClient $agent,
     ) {}
 
     public function isEnabled(): bool
@@ -67,6 +70,32 @@ class Uptimex
         return $this->isEnabled()
             && $this->context !== null
             && ! $this->isPaused();
+    }
+
+    /**
+     * Whether a new trace should be opened right now. The automatic trace
+     * roots (HTTP requests, Artisan commands, scheduled tasks) gate on this
+     * instead of `isEnabled()`: telemetry is delivered only through the
+     * `uptimex:agent` daemon, so with no agent running the SDK starts no
+     * trace at all — it captures nothing, exactly as if it were disabled —
+     * and resumes on its own once the agent is back.
+     */
+    public function shouldStartTrace(): bool
+    {
+        return $this->isEnabled() && $this->agentAvailable();
+    }
+
+    /**
+     * Whether the local `uptimex:agent` daemon is reachable. The verdict is
+     * cached per process by {@see AgentGate}, so this costs a single socket
+     * probe per recheck window — not one per request.
+     */
+    private function agentAvailable(): bool
+    {
+        return AgentGate::isAgentUp(
+            fn (): bool => $this->agent->ping(),
+            (int) $this->config->get('uptimex.agent_health_recheck_seconds', 30),
+        );
     }
 
     public function context(): ?ExecutionContext
